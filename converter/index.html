@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Converter XLS → CSV</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../static/css/app.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<style>
+.steps-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.step-card {
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.step-num {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: .1em;
+}
+
+.step-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.step-desc {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-2);
+    line-height: 1.7;
+}
+
+.step-path {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    background: var(--accent-glow);
+    border: 1px solid rgba(59,130,246,.25);
+    border-radius: 4px;
+    padding: 4px 8px;
+    display: inline-block;
+    margin-top: 2px;
+}
+
+/* ============================================================
+   TERMINAL
+============================================================ */
+.terminal-wrap {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.terminal-bar {
+    background: var(--bg-3);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.terminal-dots { display: flex; gap: 5px; }
+.terminal-dots span { width: 10px; height: 10px; border-radius: 50%; opacity: .7; }
+.terminal-dots span:nth-child(1) { background: var(--danger); }
+.terminal-dots span:nth-child(2) { background: var(--warning); }
+.terminal-dots span:nth-child(3) { background: var(--success); }
+
+.terminal-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    color: var(--text-3);
+    flex: 1;
+    padding-left: 8px;
+}
+
+#output {
+    background: #090b0d;
+    color: var(--text-3);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.9;
+    padding: 16px 18px;
+    min-height: 200px;
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+}
+
+#output .ok   { color: #6dbf95; display: block; }
+#output .err  { color: var(--danger); display: block; }
+#output .info { color: var(--text-3); display: block; }
+#output .sep  { color: #1e2428; display: block; }
+
+.action-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.spinner-inline {
+    width: 14px; height: 14px;
+    border: 2px solid var(--border-hi);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    display: none;
+}
+
+.spinner-inline.visible { display: block; }
+</style>
+</head>
+
+<body>
+
+<header id="topbar">
+    <div class="topbar-left">
+        <a href="../dashboard.html" class="btn btn-ghost">
+            <i data-lucide="arrow-left"></i> Voltar
+        </a>
+        <div class="logo">
+            <div class="logo-icon">
+                <i data-lucide="repeat"></i>
+            </div>
+            CONVERTER <span class="logo-sub">XLS → CSV</span>
+        </div>
+    </div>
+</header>
+
+
+<div id="app">
+
+    <!-- ========================================================
+         COMO USAR
+    ======================================================== -->
+    <section>
+        <div class="etapa-label">
+            <span class="etapa-num">ETAPA 01</span>
+            <span class="etapa-title">Como usar</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <div class="card">
+            <div class="steps-grid">
+
+                <div class="step-card">
+                    <span class="step-num">01 — ENTRADA</span>
+                    <span class="step-title">Copie os arquivos XLS</span>
+                    <span class="step-desc">
+                        Mova ou copie os arquivos <code style="color:var(--warning)">.xls</code> / <code style="color:var(--warning)">.xlsx</code> para a pasta abaixo. Todos os arquivos encontrados serão processados em lote.
+                    </span>
+                    <span class="step-path">📁 converter/</span>
+                </div>
+
+                <div class="step-card">
+                    <span class="step-num">02 — PROCESSAR</span>
+                    <span class="step-title">Execute a conversão</span>
+                    <span class="step-desc">
+                        Clique em <b style="color:var(--text)">Executar Conversão</b> abaixo. O script Python lê todas as abas de cada arquivo e une o conteúdo em um único CSV por arquivo.
+                    </span>
+                </div>
+
+                <div class="step-card">
+                    <span class="step-num">03 — SAÍDA</span>
+                    <span class="step-title">Colete os CSVs gerados</span>
+                    <span class="step-desc">
+                        Os arquivos <code style="color:var(--success)">.csv</code> são gerados na mesma pasta dos XLS originais, com o mesmo nome.
+                    </span>
+                    <span class="step-path">📁 converter/</span>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+
+    <!-- ========================================================
+         EXECUÇÃO
+    ======================================================== -->
+    <section>
+        <div class="etapa-label">
+            <span class="etapa-num">ETAPA 02</span>
+            <span class="etapa-title">Executar</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <div class="terminal-wrap">
+            <div class="terminal-bar">
+                <span class="terminal-dots">
+                    <span></span><span></span><span></span>
+                </span>
+                <span class="terminal-title">CONSOLE</span>
+                <div class="action-row">
+                    <span id="spinner" class="spinner-inline"></span>
+                    <button id="btnRun" class="btn btn-primary" onclick="runConverter()">
+                        <i data-lucide="play"></i> Executar Conversão
+                    </button>
+                </div>
+            </div>
+            <div id="output"><span class="info">Aguardando execução...</span></div>
+        </div>
+    </section>
+
+</div>
+
+
+<script>
+const outputEl = document.getElementById('output');
+const btnRun   = document.getElementById('btnRun');
+const spinner  = document.getElementById('spinner');
+
+function log(msg, type = 'info') {
+    const span = document.createElement('span');
+    span.className = type;
+    span.textContent = msg;
+    outputEl.appendChild(span);
+    outputEl.scrollTop = outputEl.scrollHeight;
+}
+
+function logSep() {
+    log('──────────────────────────────', 'sep');
+}
+
+async function runConverter() {
+    outputEl.innerHTML = '';
+    btnRun.disabled = true;
+    spinner.classList.add('visible');
+
+    logSep();
+    log('Iniciando conversão...', 'info');
+
+    try {
+        const res  = await fetch('/run-converter', { method: 'POST' });
+        const data = await res.json();
+
+        logSep();
+        const lines = (data.output || '').split('\n');
+        lines.forEach(line => {
+            if (!line) return;
+            const type = line.startsWith('[X]') || line.startsWith('[ERRO]') ? 'err' : 'ok';
+            log(line, type);
+        });
+
+        if (!data.ok) {
+            logSep();
+            log('Processo encerrado com erro.', 'err');
+        }
+
+    } catch (err) {
+        logSep();
+        log('[ERRO] Não foi possível contactar o servidor.', 'err');
+        log('Certifique-se de ter iniciado via start.bat', 'info');
+    } finally {
+        btnRun.disabled = false;
+        spinner.classList.remove('visible');
+    }
+}
+
+lucide.createIcons();
+</script>
+
+</body>
+</html>

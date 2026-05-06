@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OSO Export</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../static/css/app.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<style>
+.d-none { display: none !important; }
+
+/* ============================================================
+   CONFIG GRID (drop zone + controls)
+============================================================ */
+.config-grid {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 20px;
+    align-items: stretch;
+}
+
+.drop-zone {
+    border: 1px dashed var(--border-hi);
+    border-radius: var(--radius-lg);
+    padding: 20px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    background: var(--muted-dim);
+    text-align: center;
+}
+
+.drop-zone:hover { border-color: var(--accent); background: var(--accent-glow); }
+.drop-zone.loaded { border-color: var(--success); border-style: solid; background: var(--success-dim); }
+.drop-zone i { color: var(--text-3); transition: color .2s; }
+.drop-zone:hover i { color: var(--accent); }
+.drop-zone.loaded i { color: var(--success); }
+.drop-zone strong { font-size: 12px; font-weight: 500; color: var(--text); }
+.drop-zone p { font-size: 11px; color: var(--text-3); font-family: var(--mono); }
+
+.controls-col {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 16px;
+}
+
+.control-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.filter-group.grow { flex: 1; min-width: 0; }
+
+.action-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* ============================================================
+   SCHEMA MODAL (dialog nativo)
+============================================================ */
+dialog#schema-modal {
+    background: var(--bg-2);
+    border: 1px solid var(--border-hi);
+    border-radius: var(--radius-lg);
+    width: 90%;
+    max-width: 760px;
+    max-height: 85vh;
+    padding: 0;
+    color: var(--text);
+    margin: auto;
+    overflow: hidden;
+}
+
+dialog#schema-modal[open] {
+    display: flex;
+    flex-direction: column;
+}
+
+dialog#schema-modal::backdrop {
+    background: rgba(0,0,0,.7);
+    backdrop-filter: blur(4px);
+}
+
+.schema-alert {
+    background: var(--danger-dim);
+    border: 1px solid var(--danger);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    color: var(--danger);
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.6;
+}
+
+.schema-alert ul { padding-left: 16px; margin: 0; }
+
+.td-inactive { color: var(--text-3) !important; }
+
+/* ============================================================
+   APP ALERT (toast fixo no rodapé)
+============================================================ */
+.app-alert {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 500;
+    padding: 12px 20px;
+    font-family: var(--mono);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-top: 1px solid;
+    animation: fadeSlide .3s ease;
+}
+
+.app-alert-success { background: var(--success-dim); color: var(--success); border-color: rgba(16,185,129,.4); }
+.app-alert-danger  { background: var(--danger-dim);  color: var(--danger);  border-color: rgba(239,68,68,.4); }
+.app-alert-warning { background: var(--warning-dim); color: var(--warning); border-color: rgba(245,158,11,.4); }
+.app-alert code    { color: var(--warning); font-family: var(--mono); }
+.app-alert-msg     { flex: 1; }
+.app-alert-close   { background: none; border: none; color: currentColor; font-size: 20px; cursor: pointer; opacity: .6; padding: 0 4px; line-height: 1; }
+.app-alert-close:hover { opacity: 1; }
+
+/* ============================================================
+   KEYWATCH MODAL
+============================================================ */
+dialog.kw-dialog {
+    background: var(--bg-2);
+    border: 1px solid var(--border-hi);
+    border-radius: var(--radius-lg);
+    color: var(--text);
+    padding: 24px;
+    max-width: 520px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    margin: auto;
+    position: relative;
+}
+
+dialog.kw-dialog::backdrop {
+    background: rgba(0,0,0,.7);
+    backdrop-filter: blur(4px);
+}
+
+.kw-search {
+    background: var(--bg-3);
+    border: 1px solid var(--border-hi);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 12px;
+    width: 100%;
+    margin-bottom: 14px;
+    outline: none;
+}
+
+.kw-search:focus { border-color: var(--accent); }
+
+.kw-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: var(--mono); }
+.kw-table th { color: var(--text-3); padding: 8px; border-bottom: 1px solid var(--border); text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.kw-table td { padding: 8px; border-bottom: 1px solid var(--border); color: var(--text-2); }
+.kw-table tr:last-child td { border-bottom: none; }
+
+.kw-key {
+    background: var(--bg-3);
+    color: var(--accent);
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    border: 1px solid var(--border-hi);
+    margin-right: 4px;
+    font-size: 11px;
+}
+
+.kw-context {
+    font-size: 10px;
+    color: var(--text-3);
+    position: absolute;
+    top: 26px;
+    right: 26px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    pointer-events: none;
+}
+</style>
+</head>
+
+<body>
+
+<!-- ============================================================
+     TOPBAR
+============================================================ -->
+<header id="topbar">
+    <div class="topbar-left">
+        <a href="../dashboard.html" class="btn btn-ghost">
+            <i data-lucide="arrow-left"></i> Voltar
+        </a>
+        <div class="logo">
+            <div class="logo-icon">
+                <i data-lucide="file-spreadsheet"></i>
+            </div>
+            OSO <span class="logo-sub">EXPORT</span>
+        </div>
+    </div>
+</header>
+
+
+<div id="app">
+
+    <!-- ========================================================
+         INFO
+    ======================================================== -->
+    <div id="info-callout" class="card">
+        <div class="etapa-label" style="margin-bottom: 10px;">
+            <span class="etapa-num" style="border-color:rgba(245,158,11,.3);background:var(--warning-dim);color:var(--warning);">ATENÇÃO</span>
+            <span class="etapa-title">Pré-requisito de importação</span>
+            <div class="etapa-sep"></div>
+            <button onclick="document.getElementById('info-callout').remove()" class="btn btn-ghost" style="padding: 3px 10px; font-size: 10px;">fechar</button>
+        </div>
+        <p style="font-size: 12px; color: var(--text-2); font-family: var(--mono); line-height: 1.8;">
+            Para importação no <b style="color: var(--text);">Globus</b> é necessário ter criado previamente a entrada na tela de programação.<br>
+            <span style="color: var(--text-3);">Em caso de dúvidas consulte o <a href="./manual.html" style="color: var(--accent); text-decoration: none;">Manual</a>.</span>
+        </p>
+    </div>
+
+
+    <!-- ========================================================
+         ETAPA 01
+    ======================================================== -->
+    <section>
+        <div class="etapa-label">
+            <span class="etapa-num">ETAPA 01</span>
+            <span class="etapa-title">Importação e exportação</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <div class="card">
+            <div class="config-grid">
+
+                <div class="drop-zone" id="drop-xlsx" onclick="document.getElementById('fileInput').click()">
+                    <i data-lucide="file-spreadsheet"></i>
+                    <strong>Planilha de escala</strong>
+                    <p>.xlsx — programação</p>
+                    <input type="file" id="fileInput" class="d-none" accept=".xlsx">
+                </div>
+
+                <div class="controls-col">
+                    <div class="control-row">
+                        <div class="filter-group grow">
+                            <label>Formato de saída</label>
+                            <select id="formatSelect">
+                                <option value="txt">Exportar TXT</option>
+                                <option value="csv">Exportar CSV</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="action-row">
+                        <button onclick="handleProcess()" class="btn btn-primary">
+                            <i data-lucide="play"></i> Processar
+                        </button>
+                        <button onclick="document.getElementById('schema-modal').showModal()" class="btn btn-ghost">
+                            <i data-lucide="braces"></i> Ver schema
+                        </button>
+                        <a href="./manual.html" id="man_link" class="btn btn-ghost">
+                            <i data-lucide="book-open"></i> Manual
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+</div><!-- #app -->
+
+
+<!-- ============================================================
+     SCHEMA MODAL
+============================================================ -->
+<dialog id="schema-modal">
+    <div class="modal-header">
+        <span style="font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text);">Configurações de campo</span>
+        <button class="btn-close-modal" onclick="document.getElementById('schema-modal').close()">×</button>
+    </div>
+    <div class="modal-body" style="overflow-y: auto; flex: 1;">
+        <div id="modalSchemaAlert" class="schema-alert d-none">
+            <ul id="modalSchemaErrors"></ul>
+        </div>
+        <div class="table-wrap" style="max-height: 60vh;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Pos</th>
+                        <th>Size</th>
+                        <th>Mask</th>
+                    </tr>
+                </thead>
+                <tbody id="schemaTableTbody"></tbody>
+            </table>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="document.getElementById('schema-modal').close()">Fechar</button>
+        <button class="btn btn-ghost" onclick="exportSchemaToCSV()">
+            <i data-lucide="download"></i> CSV
+        </button>
+    </div>
+</dialog>
+
+
+<!-- ============================================================
+     SCRIPTS
+============================================================ -->
+<script src="settings.js"></script>
+<script src="export.js"></script>
+<script src="engine.js"></script>
+<script src="static/sheetjs.js"></script>
+<script src="static/app.js"></script>
+<script src="static/keywatch.js"></script>
+
+<script>
+lucide.createIcons();
+
+document.getElementById('fileInput').addEventListener('change', function() {
+    const drop = document.getElementById('drop-xlsx');
+    if (this.files[0]) {
+        drop.classList.add('loaded');
+        drop.querySelector('p').textContent = this.files[0].name;
+    }
+});
+
+const appKeyMap = new Keywatch({
+    shortcutModalClasslist: 'kw-dialog',
+    searchInputClasslist:   'kw-search',
+    modalTableClasslist:    'kw-table',
+    modalTableLabelClasslist: 'kw-key',
+    contextLabelClasslist:  'kw-context',
+});
+
+appKeyMap.bind('alt+l', () => { location.reload(); }, { desc: 'Limpa e recarrega página' });
+appKeyMap.bind('f1',    () => { document.getElementById('man_link').click(); }, { desc: 'Abre manual de uso' });
+
+
+function renderSchemaTable() {
+    const tbody    = document.getElementById('schemaTableTbody');
+    const alertDiv = document.getElementById('modalSchemaAlert');
+    const errorList = document.getElementById('modalSchemaErrors');
+    const typeMap  = { hour: 'HH:MM' };
+
+    let currentPos = 1;
+    let errors = [];
+
+    tbody.innerHTML    = '';
+    errorList.innerHTML = '';
+    alertDiv.classList.add('d-none');
+
+    SETTINGS.layout.forEach(item => {
+        if (!SETTINGS.camposDisponiveis.includes(item.field))
+            errors.push(`Campo <strong>${item.field}</strong> não existe nos campos disponíveis`);
+        if (item.type && !typeMap[item.type])
+            errors.push(`Tipo <strong>${item.type}</strong> no campo ${item.field} sem máscara mapeada`);
+        if (!item.size || item.size <= 0)
+            errors.push(`Campo <strong>${item.field}</strong> com tamanho inválido`);
+    });
+
+    SETTINGS.camposDisponiveis.forEach(campoNome => {
+        const layoutConfig = SETTINGS.layout.find(item => item.field === campoNome);
+        const tr = document.createElement('tr');
+
+        if (layoutConfig) {
+            const mask = layoutConfig.type ? (typeMap[layoutConfig.type] || '') : '';
+            tr.innerHTML = `<td>${campoNome}</td><td>${currentPos}</td><td>${layoutConfig.size}</td><td>${mask}</td>`;
+            currentPos += layoutConfig.size;
+        } else {
+            tr.innerHTML = `
+                <td class="td-inactive">${campoNome}</td>
+                <td class="td-inactive">—</td>
+                <td class="td-inactive">—</td>
+                <td class="td-inactive">—</td>`;
+        }
+        tbody.appendChild(tr);
+    });
+
+    if (errors.length > 0) {
+        errors.forEach(err => {
+            const li = document.createElement('li');
+            li.innerHTML = err;
+            errorList.appendChild(li);
+        });
+        alertDiv.classList.remove('d-none');
+    }
+}
+renderSchemaTable();
+
+
+function exportSchemaToCSV() {
+    const typeMap = { hour: 'HH:MM' };
+    let currentPos = 1;
+    let csvContent = 'Campo;Posicao Inicial;Tamanho;Mascara\n';
+
+    SETTINGS.layout.forEach(item => {
+        if (SETTINGS.camposDisponiveis.includes(item.field)) {
+            const mask = item.type ? (typeMap[item.type] || '') : '';
+            csvContent += `${item.field};${currentPos};${item.size};${mask}\n`;
+            currentPos += item.size;
+        }
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'layout_schema.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+
+async function handleProcess() {
+    const fileInput = document.getElementById('fileInput');
+    if (!fileInput.files[0]) return appAlert('warning', 'Selecione um arquivo .xlsx', false);
+
+    const format = document.getElementById('formatSelect').value;
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+        try {
+            const data     = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const results  = Engine.process(workbook);
+
+            if (!results || results.length === 0)
+                throw new Error('Nenhum dado processado. Verifique se a aba e os intervalos estão corretos.');
+
+            if (format === 'txt') Exporter.download(Exporter.toTXT(results), 'import.txt', 'text/plain');
+            else if (format === 'csv') Exporter.download(Exporter.toCSV(results), 'import.csv', 'text/csv');
+
+            appAlert('success', 'Arquivo processado com sucesso!', true);
+
+        } catch (err) {
+            console.error(err);
+            appAlert('danger', `<b>Erro</b> ao processar arquivo:<br><code>${err.message}</code>`, false);
+        }
+    };
+
+    reader.readAsArrayBuffer(fileInput.files[0]);
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flow — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="static/css/app.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<style>
+.dash-header {
+    padding: 48px 0 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.dash-title {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.dash-title .logo-icon {
+    width: 36px; height: 36px;
+}
+
+.dash-title .logo-icon svg { width: 18px; height: 18px; }
+
+.dash-sub {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-3);
+    letter-spacing: .06em;
+    padding-left: 50px;
+}
+
+.projects-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.project-card {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    transition: border-color .2s, background .2s;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+}
+
+.project-card:hover {
+    border-color: var(--border-hi);
+    background: var(--bg-3);
+}
+
+.card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.card-icon {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.card-icon svg { width: 18px; height: 18px; color: white; }
+
+.card-tag {
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    color: var(--text-3);
+    background: var(--bg-4);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 2px 7px;
+    text-transform: uppercase;
+    align-self: flex-start;
+}
+
+.card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1;
+}
+
+.card-name {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    color: var(--text);
+}
+
+.card-desc {
+    font-size: 12px;
+    color: var(--text-2);
+    line-height: 1.6;
+}
+
+.card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+/* icon accent colors */
+.ic-blue   { background: #1d4ed8; }
+.ic-violet { background: #7c3aed; }
+.ic-teal   { background: #0d9488; }
+.ic-amber  { background: #b45309; }
+.ic-rose   { background: #be123c; }
+</style>
+</head>
+
+<body>
+
+<header id="topbar">
+    <div class="logo">
+        <div class="logo-icon">
+            <i data-lucide="layout-dashboard"></i>
+        </div>
+        FLOW <span class="logo-sub">DASHBOARD</span>
+    </div>
+</header>
+
+
+<div id="app">
+
+    <div class="dash-header">
+        <div class="dash-title">
+            <span>Ferramentas</span>
+        </div>
+        <span class="dash-sub">selecione um projeto para abrir</span>
+    </div>
+
+    <div class="projects-grid">
+
+        <a href="pax_consolidar/index.html" class="project-card">
+            <div class="card-top">
+                <div class="card-icon ic-blue">
+                    <i data-lucide="users"></i>
+                </div>
+                <span class="card-tag">escala</span>
+            </div>
+            <div class="card-body">
+                <span class="card-name">PAX CONSOLIDAR</span>
+                <span class="card-desc">Consolida escalas de passageiros, verifica divergências e gera relatório CSV.</span>
+            </div>
+            <div class="card-footer">
+                <span class="btn btn-ghost" style="pointer-events:none;">
+                    <i data-lucide="arrow-right"></i> Abrir
+                </span>
+            </div>
+        </a>
+
+        <a href="sonda_gen/index.html" class="project-card">
+            <div class="card-top">
+                <div class="card-icon ic-violet">
+                    <i data-lucide="file-cog"></i>
+                </div>
+                <span class="card-tag">geração</span>
+            </div>
+            <div class="card-body">
+                <span class="card-name">SONDA GEN</span>
+                <span class="card-desc">Gera arquivos PL e ESC a partir de planilha de viagens para importação no SONDA.</span>
+            </div>
+            <div class="card-footer">
+                <span class="btn btn-ghost" style="pointer-events:none;">
+                    <i data-lucide="arrow-right"></i> Abrir
+                </span>
+            </div>
+        </a>
+
+        <a href="oso_export/index.html" class="project-card">
+            <div class="card-top">
+                <div class="card-icon ic-teal">
+                    <i data-lucide="file-spreadsheet"></i>
+                </div>
+                <span class="card-tag">exportação</span>
+            </div>
+            <div class="card-body">
+                <span class="card-name">OSO EXPORT</span>
+                <span class="card-desc">Exporta programação de escala em TXT posicional para importação no Globus.</span>
+            </div>
+            <div class="card-footer">
+                <span class="btn btn-ghost" style="pointer-events:none;">
+                    <i data-lucide="arrow-right"></i> Abrir
+                </span>
+            </div>
+        </a>
+
+        <a href="mapao/index.html" class="project-card">
+            <div class="card-top">
+                <div class="card-icon ic-amber">
+                    <i data-lucide="layers"></i>
+                </div>
+                <span class="card-tag">conferência</span>
+            </div>
+            <div class="card-body">
+                <span class="card-name">MAPÃO</span>
+                <span class="card-desc">Cruza escala padrão com escalinha e gera CSV consolidado com status de divergência.</span>
+            </div>
+            <div class="card-footer">
+                <span class="btn btn-ghost" style="pointer-events:none;">
+                    <i data-lucide="arrow-right"></i> Abrir
+                </span>
+            </div>
+        </a>
+
+        <a href="converter/index.html" class="project-card">
+            <div class="card-top">
+                <div class="card-icon ic-rose">
+                    <i data-lucide="repeat"></i>
+                </div>
+                <span class="card-tag">utilitário</span>
+            </div>
+            <div class="card-body">
+                <span class="card-name">CONVERTER</span>
+                <span class="card-desc">Converte arquivos XLS/XLSX para CSV em lote. Todas as abas são consolidadas em um único arquivo.</span>
+            </div>
+            <div class="card-footer">
+                <span class="btn btn-ghost" style="pointer-events:none;">
+                    <i data-lucide="arrow-right"></i> Abrir
+                </span>
+            </div>
+        </a>
+
+    </div>
+
+</div>
+
+
+<script>
+lucide.createIcons();
+</script>
+
+</body>
+</html>

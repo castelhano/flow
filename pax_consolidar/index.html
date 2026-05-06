@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TransSync Pro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../static/css/app.css">
+<script src="vendor/papaparse.min.js"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<style>
+/* ============================================================
+   ETAPA 1 — IMPORTAÇÃO
+============================================================ */
+#section-import .drop-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.drop-zone {
+    border: 1px dashed var(--border-hi);
+    border-radius: var(--radius-lg);
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    background: var(--muted-dim);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.drop-zone:hover {
+    border-color: var(--accent);
+    background: var(--accent-glow);
+}
+
+.drop-zone.loaded {
+    border-color: var(--success);
+    border-style: solid;
+    background: var(--success-dim);
+}
+
+.drop-zone svg { color: var(--text-3); width: 22px; height: 22px; transition: color .2s; }
+.drop-zone:hover svg { color: var(--accent); }
+.drop-zone.loaded svg { color: var(--success); }
+
+.drop-zone strong {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: .02em;
+}
+
+.drop-zone p {
+    font-size: 11px;
+    color: var(--text-3);
+    font-family: var(--mono);
+}
+
+.drop-zone .file-name {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--success);
+    margin-top: 2px;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ============================================================
+   SELETOR DE EMPRESAS
+============================================================ */
+#section-empresas {
+    animation: fadeSlide .3s ease;
+}
+
+.selector-paineis {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+/* Quando o painel de corte está oculto, o de conciliação ocupa a linha toda */
+#painel-pax-corte.hidden ~ .selector-painel {
+    grid-column: 1 / -1;
+}
+
+.selector-painel {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.selector-painel-titulo {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.selector-painel-desc {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin: 0 0 12px;
+    line-height: 1.5;
+}
+
+.selector-checkboxes {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#company-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.company-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-3);
+    border: 1px solid var(--border-hi);
+    border-radius: 4px;
+    padding: 5px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: var(--mono);
+    transition: border-color .15s, background .15s;
+}
+
+.company-chip:has(input:checked) {
+    border-color: var(--accent);
+    background: var(--accent-glow);
+    color: var(--accent);
+}
+
+.company-chip input { display: none; }
+
+/* ============================================================
+   ETAPA 2 — RESUMO (STATS)
+============================================================ */
+#section-resumo {
+    animation: fadeSlide .3s ease;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 10px;
+}
+
+.stat-card {
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    position: relative;
+    overflow: hidden;
+}
+
+.stat-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--text-3);
+    border-radius: 3px 0 0 3px;
+}
+
+.stat-card.c-blue::before   { background: var(--accent); }
+.stat-card.c-green::before  { background: var(--success); }
+.stat-card.c-yellow::before { background: var(--warning); }
+.stat-card.c-red::before    { background: var(--danger); }
+
+.stat-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-3);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.stat-value {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+}
+
+.stat-value-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.stat-pct {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-3);
+    line-height: 1;
+}
+
+/* ============================================================
+   ETAPA 3 — SUGESTÕES
+============================================================ */
+#section-sugestoes {
+    animation: fadeSlide .3s ease;
+}
+
+.sugestoes-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+/* ============================================================
+   ETAPA 4 — EXCEÇÕES
+============================================================ */
+#section-excecoes {
+    animation: fadeSlide .3s ease;
+}
+
+.excecoes-toolbar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    margin-bottom: 14px;
+}
+
+/* Colunas de detalhamento de score — visíveis apenas no CSV */
+.score-detail { display: none; }
+
+/* Atribuição manual */
+.assign-bar {
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-top: 12px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.assign-bar .filter-group select#select-target-trip {
+    min-width: 320px;
+    flex: 1;
+}
+
+.assign-footer {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-3);
+}
+
+#omissao-alert {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    color: var(--warning);
+    font-size: 11px;
+}
+
+#omissao-alert svg { width: 14px; height: 14px; }
+
+/* ============================================================
+   ETAPA 5 — OPERAÇÕES
+============================================================ */
+#section-operacoes {
+    animation: fadeSlide .3s ease;
+}
+
+.ops-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+}
+
+.op-card {
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-align: left;
+}
+
+.op-card:hover {
+    border-color: var(--border-hi);
+    background: var(--bg-4);
+}
+
+.op-icon {
+    width: 32px; height: 32px;
+    border-radius: var(--radius);
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg-4);
+}
+
+.op-icon svg { width: 16px; height: 16px; }
+.op-icon.c-blue   { background: var(--accent-glow);  } .op-icon.c-blue svg   { color: var(--accent);  }
+.op-icon.c-green  { background: var(--success-dim);  } .op-icon.c-green svg  { color: var(--success); }
+.op-icon.c-yellow { background: var(--warning-dim);  } .op-icon.c-yellow svg { color: var(--warning); }
+.op-icon.c-red    { background: var(--danger-dim);   } .op-icon.c-red svg    { color: var(--danger);  }
+
+.op-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.op-desc {
+    font-size: 11px;
+    color: var(--text-3);
+    font-family: var(--mono);
+    line-height: 1.4;
+}
+</style>
+</head>
+
+<body>
+
+<!-- ============================================================
+     TOPBAR
+============================================================ -->
+<header id="topbar">
+    <div class="topbar-left">
+        <a href="../dashboard.html" class="btn btn-ghost">
+            <i data-lucide="arrow-left"></i> Voltar
+        </a>
+        <div class="logo">
+            <div class="logo-icon" data-path="D:\Files\_Conciliacao" onclick="defaultPath(this)">
+                <i data-lucide="bus"></i>
+            </div>
+            TRANSSYNC <span class="logo-sub">PRO</span>
+        </div>
+    </div>
+    <div id="topbar-right">
+        <span id="status-badge">Aguardando arquivos...</span>
+        <button id="btn-processar" class="btn btn-primary hidden">
+            <i data-lucide="play"></i> Processar
+        </button>
+    </div>
+</header>
+
+
+<div id="app">
+
+    <!-- ========================================================
+         ETAPA 1 — IMPORTAÇÃO
+    ======================================================== -->
+    <section id="section-import">
+        <div class="etapa-label">
+            <span class="etapa-num">ETAPA 01</span>
+            <span class="etapa-title">Importação de dados</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <div class="drop-grid">
+
+            <!-- GPS -->
+            <div class="drop-zone" id="drop-gps">
+                <input type="file" id="input-gps" class="hidden" accept=".csv">
+                <i data-lucide="upload-cloud"></i>
+                <strong>Arquivo GPS</strong>
+                <p>.csv — viagens do dia</p>
+            </div>
+
+            <!-- Bilhetagem -->
+            <div class="drop-zone" id="drop-pax">
+                <input type="file" id="input-pax" class="hidden" accept=".csv">
+                <i data-lucide="users"></i>
+                <strong>Bilhetagem</strong>
+                <p>.csv — passageiros do dia</p>
+            </div>
+
+            <!-- Importar trabalho -->
+            <div class="drop-zone" id="drop-json">
+                <input type="file" id="input-json" class="hidden" accept=".json">
+                <i data-lucide="folder-sync"></i>
+                <strong>Restaurar trabalho</strong>
+                <p>.json — sessão salva</p>
+            </div>
+
+            <!-- Oferta x Demanda -->
+            <div class="drop-zone" id="drop-oferta-demanda">
+                <input type="file" id="input-oferta-demanda" class="hidden" accept=".json" multiple>
+                <i data-lucide="bar-chart-2"></i>
+                <strong>Oferta × Demanda</strong>
+                <p>.json — múltiplos resumos</p>
+            </div>
+
+        </div>
+    </section>
+
+
+    <!-- ========================================================
+         SELETOR DE EMPRESAS (aparece após GPS carregado ou ao importar)
+    ======================================================== -->
+    <section id="company-selector-section" class="card hidden">
+        <div class="etapa-label" style="margin-bottom:16px;">
+            <span class="etapa-num" id="selector-etapa-num">ETAPA 01</span>
+            <span class="etapa-title" id="selector-etapa-title">Configurar operadoras</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <div class="selector-paineis">
+            <!-- Painel 1: Passageiros a considerar (oculto no modo import) -->
+            <div id="painel-pax-corte" class="selector-painel">
+                <div class="selector-painel-titulo">
+                    <i data-lucide="users" style="width:13px;height:13px;"></i>
+                    Passageiros a considerar
+                </div>
+                <p class="selector-painel-desc">Desmarcadas são descartadas — não constarão no exportado.</p>
+                <div style="display:flex;gap:12px;margin-bottom:6px;">
+                    <a href="#" onclick="event.preventDefault();document.querySelectorAll('#checkboxes-pax input[type=checkbox]').forEach(c=>c.checked=true)" style="font-size:0.72rem;color:var(--accent);font-family:var(--mono);text-decoration:none;">Marcar todos</a>
+                    <a href="#" onclick="event.preventDefault();document.querySelectorAll('#checkboxes-pax input[type=checkbox]').forEach(c=>c.checked=false)" style="font-size:0.72rem;color:var(--text-3);font-family:var(--mono);text-decoration:none;">Desmarcar todos</a>
+                </div>
+                <div id="checkboxes-pax" class="selector-checkboxes"></div>
+            </div>
+
+            <!-- Painel 2: Empresas para conciliação -->
+            <div class="selector-painel">
+                <div class="selector-painel-titulo">
+                    <i data-lucide="git-merge" style="width:13px;height:13px;"></i>
+                    Empresas para conciliação
+                </div>
+                <p class="selector-painel-desc">Marcadas entram nas etapas A/B/C. As demais ficam no exportado como não conciliadas.</p>
+                <div style="display:flex;gap:12px;margin-bottom:6px;">
+                    <a href="#" onclick="event.preventDefault();document.querySelectorAll('#checkboxes-conciliacao input[type=checkbox]').forEach(c=>c.checked=true)" style="font-size:0.72rem;color:var(--accent);font-family:var(--mono);text-decoration:none;">Marcar todos</a>
+                    <a href="#" onclick="event.preventDefault();document.querySelectorAll('#checkboxes-conciliacao input[type=checkbox]').forEach(c=>c.checked=false)" style="font-size:0.72rem;color:var(--text-3);font-family:var(--mono);text-decoration:none;">Desmarcar todos</a>
+                </div>
+                <div id="checkboxes-conciliacao" class="selector-checkboxes"></div>
+            </div>
+        </div>
+
+        <button id="btn-conciliar" class="btn btn-primary">
+            <i data-lucide="zap"></i> Conciliar
+        </button>
+    </section>
+
+
+    <!-- ========================================================
+         ETAPA 2 — RESUMO
+    ======================================================== -->
+    <section id="section-resumo" class="hidden">
+        <div class="etapa-label">
+            <span class="etapa-num">ETAPA 02</span>
+            <span class="etapa-title">Resumo da conciliação</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card c-blue">
+                <div class="stat-label">Total PAX</div>
+                <div class="stat-value" id="stat-total-pax">—</div>
+            </div>
+            <div class="stat-card c-green">
+                <div class="stat-label">Atribuídos</div>
+                <div class="stat-value-row">
+                    <span class="stat-value" id="stat-assigned-pax">—</span>
+                    <span class="stat-pct" id="stat-assigned-pct"></span>
+                </div>
+            </div>
+            <div class="stat-card c-yellow">
+                <div class="stat-label">Pendentes</div>
+                <div class="stat-value-row">
+                    <span class="stat-value" id="stat-unassigned-pax">—</span>
+                    <span class="stat-pct" id="stat-unassigned-pct"></span>
+                </div>
+            </div>
+            <div class="stat-card c-red">
+                <div class="stat-label">Ignorados</div>
+                <div class="stat-value-row">
+                    <span class="stat-value" id="stat-ignorados">—</span>
+                    <span class="stat-pct" id="stat-ignorados-pct"></span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Viagens</div>
+                <div class="stat-value" id="stat-total-trips">—</div>
+            </div>
+            <div class="stat-card c-red">
+                <div class="stat-label">Omissões</div>
+                <div class="stat-value" id="stat-total-omissoes">—</div>
+            </div>
+            <div class="stat-card c-yellow">
+                <div class="stat-label">Sugestões</div>
+                <div class="stat-value" id="stat-sugestoes">—</div>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- ========================================================
+         ETAPA 3 — SUGESTÕES (etapa C do Engine)
+    ======================================================== -->
+    <section id="suggestions-section" class="card hidden">
+        <div class="etapa-label" style="margin-bottom:0;">
+            <span class="etapa-num">ETAPA 03</span>
+            <span class="etapa-title">Sugestões do engine</span>
+            <div class="etapa-sep"></div>
+            <span class="badge badge-warning" id="badge-sugestoes">0 pendentes</span>
+        </div>
+
+        <p style="font-size:12px; color:var(--text-3); font-family:var(--mono);
+                  margin: 10px 0 14px; line-height:1.6;">
+            Passageiros não atribuídos automaticamente. O engine analisou o contexto de cada
+            um e gerou sugestões — revise e confirme os que concordar.
+        </p>
+
+        <!-- Filtros Sugestões -->
+        <div class="excecoes-toolbar">
+            <div class="filter-group">
+                <label>Empresa</label>
+                <select id="sug-filter-empresa">
+                    <option value="">Todas</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Veículo</label>
+                <input type="text" id="sug-filter-veiculo" placeholder="Ex: 1077">
+            </div>
+            <div class="filter-group">
+                <label>Linha</label>
+                <input type="text" id="sug-filter-linha" placeholder="Ex: A14">
+            </div>
+            <div class="filter-group">
+                <label>Confiança</label>
+                <select id="sug-filter-confianca">
+                    <option value="">Todas</option>
+                    <option value="alto">Alto (≥70%)</option>
+                    <option value="medio">Médio (45–69%)</option>
+                    <option value="baixo">Baixo (&lt;45%)</option>
+                </select>
+            </div>
+            <button id="sug-filter-btn" class="btn btn-ghost" style="height:32px; align-self:flex-end;">
+                <i data-lucide="search"></i> Filtrar
+            </button>
+            <button id="sug-clear-btn" class="btn btn-ghost" style="height:32px; align-self:flex-end;">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:36px;">
+                            <input type="checkbox" id="select-all-sugestoes">
+                        </th>
+                        <th>Horário</th>
+                        <th>Empresa</th>
+                        <th>Veículo</th>
+                        <th>Linha</th>
+                        <th>Motivo</th>
+                        <th>Confiança</th>
+                        <th>Viagem sugerida</th>
+                        <th class="score-detail">Pts V</th>
+                        <th class="score-detail">Pts L</th>
+                        <th class="score-detail">Pts S</th>
+                        <th class="score-detail">Pts GC</th>
+                        <th class="score-detail">Pts GL</th>
+                        <th class="score-detail">Raw</th>
+                    </tr>
+                </thead>
+                <tbody id="table-suggestions-body"></tbody>
+            </table>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
+            <button id="btn-csv-sugestoes" class="btn btn-ghost">
+                <i data-lucide="download"></i> CSV
+            </button>
+            <button id="btn-confirmar-sugestoes" class="btn btn-success">
+                <i data-lucide="check-circle"></i> Confirmar selecionadas
+            </button>
+        </div>
+    </section>
+
+
+    <!-- ========================================================
+         ETAPA 4 — EXCEÇÕES (pax sem atribuição)
+    ======================================================== -->
+    <section id="section-excecoes" class="card hidden">
+        <div class="etapa-label" style="margin-bottom:14px;">
+            <span class="etapa-num">ETAPA 04</span>
+            <span class="etapa-title">Exceções — atribuição manual</span>
+            <div class="etapa-sep"></div>
+            <span class="badge badge-warning" id="badge-excecoes"></span>
+        </div>
+
+        <!-- Filtros -->
+        <div class="excecoes-toolbar">
+            <div class="filter-group">
+                <label>Empresa</label>
+                <select id="filter-empresa">
+                    <option value="">Todas</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Veículo</label>
+                <input type="text" id="filter-veiculo" placeholder="Ex: 1077">
+            </div>
+            <div class="filter-group">
+                <label>Linha</label>
+                <input type="text" id="filter-linha" placeholder="Ex: A14">
+            </div>
+            <div class="filter-group">
+                <label>De</label>
+                <input type="time" id="filter-inicio">
+            </div>
+            <div class="filter-group">
+                <label>Até</label>
+                <input type="time" id="filter-fim">
+            </div>
+            <button id="filter_btn" class="btn btn-ghost" style="height:32px; align-self:flex-end;">
+                <i data-lucide="search"></i> Filtrar
+            </button>
+            <button id="clear_btn" class="btn btn-ghost" style="height:32px; align-self:flex-end;">
+                <i data-lucide="x"></i>
+            </button>
+            <button id="btn-csv-excecoes" class="btn btn-ghost" style="height:32px; align-self:flex-end;">
+                <i data-lucide="download"></i> CSV
+            </button>
+        </div>
+
+        <!-- Tabela -->
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:36px;">
+                            <input type="checkbox" id="select-all-pax">
+                        </th>
+                        <th>Horário</th>
+                        <th>Empresa</th>
+                        <th>Veículo</th>
+                        <th>Linha</th>
+                        <th>Tipo</th>
+                    </tr>
+                </thead>
+                <tbody id="table-exceptions-body"></tbody>
+            </table>
+        </div>
+
+        <!-- Barra de atribuição manual -->
+        <div class="assign-bar">
+            <div class="filter-group">
+                <label>Veículo</label>
+                <input type="text" id="target-filter-veiculo" placeholder="Ex: 1074" style="width:90px;">
+            </div>
+            <div class="filter-group">
+                <label>Linha</label>
+                <input type="text" id="target-filter-linha" placeholder="Ex: A14" style="width:90px;">
+            </div>
+            <div class="filter-group">
+                <label>Status</label>
+                <select id="target-filter-status" style="width:110px;">
+                    <option value="">Todos</option>
+                    <option value="produtivo">Produtivo</option>
+                    <option value="omissao">Omissão</option>
+                    <option value="extra">Extra</option>
+                    <option value="editada">Editada</option>
+                </select>
+            </div>
+            <button id="btn-buscar-viagens" class="btn btn-ghost" style="height:32px; align-self:flex-end;">
+                <i data-lucide="search"></i>
+            </button>
+            <div class="filter-group" style="flex:1;">
+                <label>Viagem destino</label>
+                <select id="select-target-trip">
+                    <option value="">Use os filtros ao lado...</option>
+                </select>
+            </div>
+            <button id="btn-atribuir" class="btn btn-success" style="align-self:flex-end; height:32px;">
+                <i data-lucide="check"></i> Atribuir
+            </button>
+        </div>
+
+        <div class="assign-footer">
+            <div id="omissao-alert">
+                <i data-lucide="alert-triangle"></i>
+                Viagem do tipo omissão — será convertida para produtiva ao confirmar.
+            </div>
+            <div style="flex:1;"></div>
+            <span id="count-selected" style="color:var(--text-2);">0 selecionados</span>
+        </div>
+    </section>
+
+
+    <!-- ========================================================
+         ETAPA 5 — OPERAÇÕES / ANÁLISES
+    ======================================================== -->
+    <section id="section-operacoes" class="hidden">
+        <div class="etapa-label">
+            <span class="etapa-num">ETAPA 05</span>
+            <span class="etapa-title">Análises e exportação</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <div class="ops-grid">
+
+            <button class="op-card" onclick="Anomalies.openModal()">
+                <div class="op-icon c-red">
+                    <i data-lucide="shield-alert"></i>
+                </div>
+                <div class="op-title">Anomalias</div>
+                <div class="op-desc">Analisa omissões suspeitas e viagens editadas inconsistentes</div>
+            </button>
+
+            <button class="op-card" onclick="Storage.exportJSON()">
+                <div class="op-icon c-green">
+                    <i data-lucide="download-cloud"></i>
+                </div>
+                <div class="op-title">Salvar trabalho</div>
+                <div class="op-desc">Exporta sessão completa em JSON para continuar depois</div>
+            </button>
+
+            <button class="op-card" onclick="UIController.abrirResumoHorario()">
+                <div class="op-icon c-green">
+                    <i data-lucide="file-down"></i>
+                </div>
+                <div class="op-title">Resumo horário</div>
+                <div class="op-desc">Exporta CSV com passageiros por linha × faixa horária</div>
+            </button>
+
+        </div>
+    </section>
+
+</div><!-- #app -->
+
+
+<!-- ============================================================
+     LOADER
+============================================================ -->
+<div id="loader" class="hidden">
+    <div class="spinner"></div>
+    <p>Processando dados...</p>
+</div>
+
+
+<!-- ============================================================
+     SCRIPTS
+============================================================ -->
+<script src="vendor/jszip.min.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/DataNormalizer.js"></script>
+<script src="js/Parser.js"></script>
+<script src="js/Engine.js"></script>
+<script src="js/Storage.js"></script>
+<script src="js/UIController.js"></script>
+<script src="js/main.js"></script>
+<script src="js/modules/Anomalies.js"></script>
+
+<script>
+// Inicializa ícones Lucide
+lucide.createIcons();
+
+// ============================================================
+// Vincula drop-zones aos inputs de arquivo
+// ============================================================
+function setupDropZone(cardId, inputId, tipo) {
+    const card  = document.getElementById(cardId);
+    const input = document.getElementById(inputId);
+    if (!card || !input) return;
+
+    card.addEventListener('click', () => input.click());
+    input.addEventListener('click', e => e.stopPropagation());
+
+    input.addEventListener('change', e => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Feedback visual — mostra nome do arquivo
+        card.classList.add('loaded');
+        card.querySelector('p').innerText = file.name;
+
+        if (tipo) handleFileSelect(tipo, file);
+    });
+}
+
+setupDropZone('drop-gps',  'input-gps',  'gps');
+setupDropZone('drop-pax',  'input-pax',  'pax');
+setupDropZone('drop-json', 'input-json',  null);
+
+document.getElementById('input-json').addEventListener('change', e => {
+    Storage.importJSON(e.target.files[0]);
+});
+
+const _dropOD    = document.getElementById('drop-oferta-demanda');
+const _inputOD   = document.getElementById('input-oferta-demanda');
+_dropOD.addEventListener('click', () => _inputOD.click());
+_inputOD.addEventListener('click', e => e.stopPropagation());
+_inputOD.addEventListener('change', e => {
+    const files = e.target.files;
+    if (!files.length) return;
+    _dropOD.classList.add('loaded');
+    _dropOD.querySelector('p').innerText =
+        files.length === 1 ? files[0].name : `${files.length} arquivos selecionados`;
+    UIController.abrirOfertaDemanda(files);
+});
+
+// ============================================================
+// Select-all para tabela de sugestões
+// ============================================================
+document.getElementById('select-all-sugestoes').addEventListener('change', function() {
+    document.querySelectorAll('.sugestao-checkbox')
+        .forEach(cb => cb.checked = this.checked);
+});
+
+// ============================================================
+// Função utilirária com o Path default de importação
+// ============================================================
+function defaultPath(el) {
+  const value = el.getAttribute('data-path');
+  navigator.clipboard.writeText(value)
+    .then(() => {
+      console.log("Copiado: " + value);
+    })
+    .catch(err => {
+      console.error(err);
+    });
+}
+
+</script>
+
+</body>
+</html>

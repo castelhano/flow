@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapão — Escalas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../static/css/app.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<style>
+/* ============================================================
+   DROP ZONES
+============================================================ */
+.drop-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.drop-zone {
+    border: 1px dashed var(--border-hi);
+    border-radius: var(--radius-lg);
+    padding: 28px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    background: var(--muted-dim);
+    text-align: center;
+}
+
+.drop-zone:hover { border-color: var(--accent); background: var(--accent-glow); }
+
+.drop-zone.loaded { border-color: var(--success); border-style: solid; background: var(--success-dim); }
+.drop-zone.error  { border-color: var(--danger);  border-style: solid; background: var(--danger-dim); }
+
+.drop-zone i { color: var(--text-3); transition: color .2s; }
+.drop-zone:hover i { color: var(--accent); }
+.drop-zone.loaded i { color: var(--success); }
+.drop-zone.error  i { color: var(--danger); }
+
+.drop-zone strong { font-size: 12px; font-weight: 500; color: var(--text); }
+.drop-zone p      { font-size: 11px; color: var(--text-3); font-family: var(--mono); }
+
+/* ============================================================
+   TERMINAL
+============================================================ */
+.terminal-wrap {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.terminal-bar {
+    background: var(--bg-3);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.terminal-dots { display: flex; gap: 5px; }
+.terminal-dots span { width: 10px; height: 10px; border-radius: 50%; opacity: .7; }
+.terminal-dots span:nth-child(1) { background: var(--danger); }
+.terminal-dots span:nth-child(2) { background: var(--warning); }
+.terminal-dots span:nth-child(3) { background: var(--success); }
+
+.terminal-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    color: var(--text-3);
+}
+
+#log {
+    background: #090b0d;
+    color: var(--text-3);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.9;
+    padding: 16px 18px;
+    min-height: 180px;
+    max-height: 360px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+}
+
+#log .ok   { color: #6dbf95; display: block; }
+#log .warn { color: var(--warning); display: block; }
+#log .err  { color: var(--danger); display: block; }
+#log .info { color: var(--text-3); display: block; }
+#log .sep  { color: #1e2428; display: block; }
+</style>
+</head>
+
+<body>
+
+<!-- ============================================================
+     TOPBAR
+============================================================ -->
+<header id="topbar">
+    <div class="topbar-left">
+        <a href="../dashboard.html" class="btn btn-ghost">
+            <i data-lucide="arrow-left"></i> Voltar
+        </a>
+        <div class="logo">
+            <div class="logo-icon">
+                <i data-lucide="layers"></i>
+            </div>
+            MAPÃO <span class="logo-sub">ESC</span>
+        </div>
+    </div>
+    <div id="topbar-right">
+        <span id="status-badge">Aguardando arquivos...</span>
+        <button id="btnProcess" class="btn btn-primary hidden" onclick="handleProcess()">
+            <i data-lucide="download"></i> Processar e baixar CSV
+        </button>
+    </div>
+</header>
+
+
+<div id="app">
+
+    <!-- ========================================================
+         ETAPA 01 — ARQUIVOS
+    ======================================================== -->
+    <section>
+        <div class="etapa-label">
+            <span class="etapa-num">ETAPA 01</span>
+            <span class="etapa-title">Arquivos de entrada</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <div class="card">
+            <div class="drop-grid-2">
+
+                <div class="drop-zone" id="drop-padrao" onclick="document.getElementById('fileEscalaPadrao').click()">
+                    <i data-lucide="file-text"></i>
+                    <strong>Escala Padrão</strong>
+                    <p>escalaPadrao.txt</p>
+                    <input type="file" id="fileEscalaPadrao" class="hidden" accept=".txt,.TXT">
+                </div>
+
+                <div class="drop-zone" id="drop-escalinha" onclick="document.getElementById('fileEscalinha').click()">
+                    <i data-lucide="file-text"></i>
+                    <strong>Escalinha</strong>
+                    <p>escalinha.TXT</p>
+                    <input type="file" id="fileEscalinha" class="hidden" accept=".txt,.TXT">
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+
+    <!-- ========================================================
+         ETAPA 02 — LOG
+    ======================================================== -->
+    <section>
+        <div class="etapa-label">
+            <span class="etapa-num">ETAPA 02</span>
+            <span class="etapa-title">Log de processamento</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <div class="terminal-wrap">
+            <div class="terminal-bar">
+                <span class="terminal-dots">
+                    <span></span><span></span><span></span>
+                </span>
+                <span class="terminal-title">LOG</span>
+            </div>
+            <div id="log"><span class="info">Aguardando arquivos...</span></div>
+        </div>
+    </section>
+
+</div><!-- #app -->
+
+
+<!-- ============================================================
+     SCRIPTS
+============================================================ -->
+<script src="settings.js"></script>
+<script src="engine.js"></script>
+<script>
+let textPadrao    = null;
+let textEscalinha = null;
+
+const btnProcess = document.getElementById('btnProcess');
+const statusBadge = document.getElementById('status-badge');
+const logEl      = document.getElementById('log');
+let logCleared   = false;
+
+function log(msg, type = 'info') {
+    if (!logCleared) { logEl.innerHTML = ''; logCleared = true; }
+    const span = document.createElement('span');
+    span.className = type;
+    span.textContent = msg;
+    logEl.appendChild(span);
+    logEl.scrollTop = logEl.scrollHeight;
+}
+
+function logSep() {
+    log('──────────────────────────────', 'sep');
+}
+
+function checkReady() {
+    const ready = textPadrao && textEscalinha;
+    const partial = textPadrao || textEscalinha;
+
+    btnProcess.classList.toggle('hidden', !ready);
+    statusBadge.textContent = ready    ? 'Pronto para processar' :
+                              partial  ? 'Aguardando 1 arquivo...' :
+                                         'Aguardando arquivos...';
+}
+
+function setupDrop(inputId, dropId, onLoad, label) {
+    const input = document.getElementById(inputId);
+    const drop  = document.getElementById(dropId);
+
+    input.addEventListener('change', () => {
+        const file = input.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+
+        reader.onload = (e) => {
+            onLoad(e.target.result);
+            drop.classList.remove('error');
+            drop.classList.add('loaded');
+            drop.querySelector('p').textContent = file.name;
+            log(`[${label}]  ${file.name}  —  ${(file.size / 1024).toFixed(1)} KB`, 'ok');
+            checkReady();
+        };
+
+        reader.onerror = () => {
+            drop.classList.add('error');
+            log(`[${label}]  erro ao ler arquivo`, 'err');
+        };
+
+        reader.readAsText(file, 'UTF-8');
+    });
+}
+
+setupDrop('fileEscalaPadrao', 'drop-padrao',   (t) => { textPadrao = t; },    'ESCALA PADRÃO');
+setupDrop('fileEscalinha',    'drop-escalinha', (t) => { textEscalinha = t; }, 'ESCALINHA    ');
+
+function handleProcess() {
+    try {
+        logSep();
+        log('Iniciando processamento…', 'info');
+
+        const csv       = processFiles(textPadrao, textEscalinha);
+        const lines     = csv.split('\n');
+        const dataLines = lines.slice(1).filter(l => l.split(';').some(c => c.trim() !== ''));
+
+        let ok = 0, div = 0, inv = 0;
+        dataLines.forEach(l => {
+            if      (l.includes(';OK;'))         ok++;
+            else if (l.includes(';DIVERGENTE;')) div++;
+            else if (l.includes(';INVERTIDO;'))  inv++;
+        });
+
+        logSep();
+        log(`Registros processados: ${dataLines.length}`, 'info');
+        log(`  ✓  OK:          ${ok}`,  'ok');
+        if (inv) log(`  ⚠  INVERTIDO:   ${inv}`, 'warn');
+        if (div) log(`  ✗  DIVERGENTE:  ${div}`, 'err');
+
+        const blob     = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+        const url      = URL.createObjectURL(blob);
+        const a        = document.createElement('a');
+        a.href         = url;
+        a.download     = `escala_consolidada_${today()}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        logSep();
+        log('CSV gerado — download iniciado.', 'ok');
+
+    } catch (err) {
+        logSep();
+        log(`ERRO: ${err.message}`, 'err');
+        console.error(err);
+    }
+}
+
+function today() {
+    const d = new Date();
+    return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+}
+
+lucide.createIcons();
+</script>
+
+</body>
+</html>

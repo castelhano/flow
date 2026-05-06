@@ -1,0 +1,117 @@
+
+body{
+    margin: 0px;
+    font-family: sans-serif;
+}
+h1, h2, h3, p{
+    margin: 0px;
+}
+.header{
+    background-color: darkslategray;
+    line-height: 2.5;
+    color: #F1F1F1;
+    margin-bottom: 10px;
+    padding-left: 10px;
+}
+.container{
+    padding: 10px;
+}
+.callout{
+    padding: 10px 10px 10px 15px;
+    border: 1px solid gray;
+    border-left: 4px solid;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    font-size: 15px;
+}
+.callout-success{
+    border-left: 5px solid darkslategray;
+}
+.mt-1{margin-top: 10px;}
+.mt-2{margin-top: 20px;}
+.d-none{display: none;}
+.form{
+    padding: 10px;
+    border-radius: 5px;
+    background-color: antiquewhite;
+}
+#linhas_container{
+    list-style: none;
+    padding: 0px;
+    margin-top: 0px;
+    margin-right: 10px;
+}
+#linhas_container li{
+    min-width: 90px;
+    line-height: 1.8;
+    border: 1px solid gray;
+    border-top: 0;
+    text-align: center;
+}
+#linhas_container li:first-child{
+    border-top: 1px solid gray;
+    border-radius: 3px 3px 0px 0px;
+}
+#linhas_container li:last-child{
+    border-radius: 0px 0px 3px 3px;
+}
+#linhas_container li:hover{
+    background-color: antiquewhite;
+    cursor: pointer;
+}
+.row{
+    display: flex;
+}
+.main-container{
+    flex-grow: 3;
+    font-family: monospace;
+    padding: 10px;
+    border: 1px solid gray;
+    border-radius: 5px;
+}
+.console{
+    flex-grow: 1;
+    font-family: monospace;
+    font-size: 16px;
+    padding: 5px;
+}
+.console > div{
+    background-color: #3C3C3C;
+    border-radius: 3px;
+    padding: 8px 10px;
+    color: #F1F1F1;
+    min-height: 150px;
+}
+
+.btn{
+    padding: 5px 10px;
+    cursor: pointer;
+}
+.btn-primary{
+    background-color: cadetblue;
+    color: #F1F1F1;
+    border: 0;
+    border-radius: 5px;
+}
+.btn-primary:hover{
+    background-color: darkcyan;
+}
+.breadcrumb{
+    padding: 0px;
+    margin: 0px;
+    margin-top: 5px;    
+    list-style: none;
+}
+.breadcrumb-item{
+    display: inline;
+    font-weight: bold;
+}
+.breadcrumb-item:last-child{
+    font-weight: bold;
+    color: darkred;
+}
+.breadcrumb li+li:before {
+    padding: 8px;
+    color: black;
+    content: "/\00a0";
+  }

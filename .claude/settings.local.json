@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Remove-Item -Recurse -Force \"d:\\\\Studio\\\\flow\\\\oso_export\\\\static\\\\bootstrap.min.css\", \"d:\\\\Studio\\\\flow\\\\oso_export\\\\static\\\\bootstrap.bundle.min.js\", \"d:\\\\Studio\\\\flow\\\\oso_export\\\\static\\\\bs_icons\", \"d:\\\\Studio\\\\flow\\\\oso_export\\\\static\\\\app.css\")"
+    ]
+  }
+}

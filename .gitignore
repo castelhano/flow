@@ -1,0 +1,17 @@
+# Python
+converter/venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Arquivos de dados do converter (entrada e saída)
+converter/*.xls
+converter/*.xlsx
+converter/*.xlsm
+converter/*.csv
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini

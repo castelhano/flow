@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sonda Gen — M2M</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../static/css/app.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<style>
+.d-none { display: none !important; }
+
+/* ============================================================
+   CONFIG — ETAPA 01
+============================================================ */
+.config-grid {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 20px;
+    align-items: stretch;
+}
+
+.drop-zone {
+    border: 1px dashed var(--border-hi);
+    border-radius: var(--radius-lg);
+    padding: 20px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    background: var(--muted-dim);
+    text-align: center;
+}
+
+.drop-zone:hover { border-color: var(--accent); background: var(--accent-glow); }
+.drop-zone.loaded { border-color: var(--success); border-style: solid; background: var(--success-dim); }
+
+.drop-zone i { color: var(--text-3); transition: color .2s; }
+.drop-zone:hover i { color: var(--accent); }
+.drop-zone.loaded i { color: var(--success); }
+
+.drop-zone strong { font-size: 12px; font-weight: 500; color: var(--text); }
+.drop-zone p { font-size: 11px; color: var(--text-3); font-family: var(--mono); }
+.drop-zone .file-name {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--success);
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.controls-col {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 16px;
+}
+
+.control-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.filter-group.grow { flex: 1; min-width: 0; }
+
+/* ============================================================
+   OUTPUT — ETAPA 02
+============================================================ */
+.output-grid {
+    display: grid;
+    grid-template-columns: 148px 1fr;
+    gap: 16px;
+    align-items: start;
+}
+
+/* Lista de linhas */
+.linhas-card {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.linhas-hint {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-3);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+#linhas_container {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+#linhas_container li {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    padding: 6px 10px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg-3);
+    cursor: pointer;
+    color: var(--text-2);
+    transition: border-color .15s, color .15s, background .15s;
+    text-align: center;
+}
+
+#linhas_container li:hover {
+    border-color: var(--border-hi);
+    color: var(--text);
+}
+
+#linhas_container li.active {
+    border-color: var(--accent);
+    background: var(--accent-glow);
+    color: var(--accent);
+}
+
+/* Terminal */
+.terminal-wrap {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.terminal-bar {
+    background: var(--bg-3);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.terminal-dots {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+.terminal-dots span {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.terminal-dots span:nth-child(1) { background: var(--danger); opacity: .7; }
+.terminal-dots span:nth-child(2) { background: var(--warning); opacity: .7; }
+.terminal-dots span:nth-child(3) { background: var(--success); opacity: .7; }
+
+.terminal-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    color: var(--text-3);
+    flex: 1;
+}
+
+#cnsl {
+    background: #090b0d;
+    color: #6dbf95;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.8;
+    padding: 16px 18px;
+    min-height: 220px;
+    overflow-y: auto;
+}
+
+#cnsl b { color: var(--text); }
+
+#cnsl p {
+    padding: 3px 0;
+    border-bottom: 1px solid rgba(255,255,255,.03);
+    color: var(--text-2);
+    margin: 0;
+}
+
+#cnsl p:last-child { border-bottom: none; }
+
+.cnsl-error   { color: var(--danger) !important; }
+.cnsl-warning { color: var(--warning) !important; }
+.cnsl-sep     { color: var(--text-3); }
+</style>
+</head>
+
+<body>
+
+<!-- ============================================================
+     TOPBAR
+============================================================ -->
+<header id="topbar">
+    <div class="topbar-left">
+        <a href="../dashboard.html" class="btn btn-ghost">
+            <i data-lucide="arrow-left"></i> Voltar
+        </a>
+        <div class="logo">
+            <div class="logo-icon">
+                <i data-lucide="file-cog"></i>
+            </div>
+            SONDA <span class="logo-sub">GEN</span>
+        </div>
+    </div>
+    <div id="topbar-right">
+        <span id="status-badge">v1.1.9</span>
+    </div>
+</header>
+
+
+<div id="app">
+
+    <!-- ========================================================
+         INFO
+    ======================================================== -->
+    <div id="info-callout" class="card">
+        <div class="etapa-label" style="margin-bottom: 10px;">
+            <span class="etapa-num">INFO</span>
+            <span class="etapa-title">Integração Globus → M2M</span>
+            <div class="etapa-sep"></div>
+            <button onclick="document.getElementById('info-callout').remove()" class="btn btn-ghost" style="padding: 3px 10px; font-size: 10px;">fechar</button>
+        </div>
+        <p style="font-size: 12px; color: var(--text-2); font-family: var(--mono); line-height: 1.8;">
+            No Globus: <span style="color: var(--text);">Escala → Utilitários → Integrações →
+            <span style="color: var(--accent);">Exporta escala (Goolsystem TXT)</span></span><br>
+            Selecione a opção <b>Escala</b> e exporte um arquivo por dia de importação.<br>
+            <span style="color: var(--text-3);">* Edite <b>empresas.js</b> para adicionar ou modificar empresas no seletor.</span>
+        </p>
+    </div>
+
+
+    <!-- ========================================================
+         ETAPA 01 — IMPORTAÇÃO E CONFIGURAÇÃO
+    ======================================================== -->
+    <section>
+        <div class="etapa-label">
+            <span class="etapa-num">ETAPA 01</span>
+            <span class="etapa-title">Importação e configuração</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <div class="card">
+            <div class="config-grid">
+
+                <div class="drop-zone" id="drop-txt" onclick="document.getElementById('id_file').click()">
+                    <i data-lucide="upload-cloud"></i>
+                    <strong>Arquivo de escala</strong>
+                    <p>.txt — exportação Globus</p>
+                    <input type="file" id="id_file" class="d-none" accept=".txt" oninput="processFile()">
+                </div>
+
+                <div class="controls-col">
+                    <div class="control-row">
+                        <div class="filter-group grow">
+                            <label>Empresa</label>
+                            <select id="id_empresa"></select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Tipo de exportação</label>
+                            <select id="id_tipo">
+                                <option value="PE" selected>Planejamento e Escala</option>
+                                <option value="P">Planejamento</option>
+                                <option value="E">Escala</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Tolerância</label>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <input type="number" id="id_tolerancia" min="1" max="100" value="50" style="width: 64px; min-width: unset;">
+                                <span style="font-family: var(--mono); font-size: 11px; color: var(--text-3);">%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+
+    <!-- ========================================================
+         ETAPA 02 — LINHAS E TERMINAL
+    ======================================================== -->
+    <section id="section-work" class="d-none">
+        <div class="etapa-label">
+            <span class="etapa-num">ETAPA 02</span>
+            <span class="etapa-title">Linhas detectadas</span>
+            <div class="etapa-sep"></div>
+            <button id="btnGerarTodos" class="btn btn-primary d-none" onclick="gerarTodos()">
+                <i data-lucide="download"></i> Gerar todos
+            </button>
+        </div>
+
+        <div class="output-grid">
+
+            <div class="card linhas-card">
+                <span class="linhas-hint">Linhas</span>
+                <ul id="linhas_container"></ul>
+            </div>
+
+            <div class="terminal-wrap">
+                <div class="terminal-bar">
+                    <span class="terminal-dots">
+                        <span></span><span></span><span></span>
+                    </span>
+                    <span class="terminal-title">CONSOLE</span>
+                    <button id="btnGerarLinha" data-linha="" class="btn btn-success d-none" onclick="gerarLinha(this.dataset.linha)" style="padding: 5px 14px;"></button>
+                </div>
+                <div id="cnsl">Importe um arquivo para começar...</div>
+            </div>
+
+        </div>
+    </section>
+
+</div><!-- #app -->
+
+
+<!-- ============================================================
+     SCRIPTS
+============================================================ -->
+<script src="./src/empresas.js"></script>
+<script>
+    for (key in company) {
+        document.getElementById('id_empresa').innerHTML += `<option value="${company[key]}">${company[key]}</option>`;
+    }
+</script>
+<script src="./src/jszip.min.js"></script>
+<script src="./src/filesaver.js"></script>
+<script src="./src/extras.js"></script>
+<script src="./src/processFile.js"></script>
+<script src="./src/linhaPreview.js"></script>
+<script src="./src/exportFiles.js"></script>
+<script>
+lucide.createIcons();
+
+document.getElementById('id_file').addEventListener('change', function () {
+    const drop = document.getElementById('drop-txt');
+    if (this.files[0]) {
+        drop.classList.add('loaded');
+        drop.querySelector('p').textContent = this.files[0].name;
+    }
+});
+</script>
+
+</body>
+</html>
