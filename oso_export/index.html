@@ -101,7 +101,7 @@ dialog#schema-modal::backdrop {
 
 .schema-alert ul { padding-left: 16px; margin: 0; }
 
-.td-inactive { color: var(--text-3) !important; }
+.td-inactive { background-color: #33224A !important; color: #D0BCFF !important; }
 
 /* ============================================================
    APP ALERT (toast fixo no rodapé)
@@ -204,7 +204,7 @@ dialog.kw-dialog::backdrop {
         <a href="../dashboard.html" class="btn btn-ghost">
             <i data-lucide="arrow-left"></i> Voltar
         </a>
-        <div class="logo">
+        <div class="logo" onclick="copyAppPath()">
             <div class="logo-icon">
                 <i data-lucide="file-spreadsheet"></i>
             </div>
@@ -327,6 +327,7 @@ dialog.kw-dialog::backdrop {
 <script src="static/sheetjs.js"></script>
 <script src="static/app.js"></script>
 <script src="static/keywatch.js"></script>
+<script src="../static/js/util.js"></script>
 
 <script>
 lucide.createIcons();

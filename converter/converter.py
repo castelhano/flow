@@ -18,14 +18,14 @@ def converter():
         modo_lote = True
     
     if not arquivos or (not modo_lote and not os.path.exists(arquivos[0])):
-        print(" [!] Nenhum arquivo encontrado ou o arquivo especificado não existe.")
+        print(" [!] Nenhum arquivo encontrado ou o arquivo especificado nao existe.")
         return
 
     inicio_geral = time.time()
     
     print("="*60)
     tipo_proc = "EM LOTE" if modo_lote else "INDIVIDUAL"
-    print(f" INICIANDO CONVERSÃO {tipo_proc} - {datetime.now().strftime('%H:%M:%S')}")
+    print(f" INICIANDO CONVERSAO {tipo_proc} - {datetime.now().strftime('%H:%M:%S')}")
     print(f" Arquivos na fila: {len(arquivos)}")
     print("="*60)
 
@@ -64,37 +64,3 @@ def converter():
 
 if __name__ == "__main__":
     converter()
-
-
-
-# import pandas as pd
-# import sys
-
-# def converter():
-#     # Verifica se você passou o nome do arquivo no comando
-#     if len(sys.argv) < 2:
-#         print("Uso: py converter.py nome_do_arquivo.xls")
-#         return
-
-#     entrada = sys.argv[1]
-#     saida = entrada.rsplit('.', 1)[0] + ".csv"
-
-#     print(f"Lendo: {entrada}...")
-#     xls = pd.ExcelFile(entrada)
-
-#     for i, nome_aba in enumerate(xls.sheet_names):
-#         # Lê a aba e já salva no CSV para não encher a RAM
-#         df = pd.read_excel(xls, sheet_name=nome_aba)
-        
-#         modo = 'w' if i == 0 else 'a'
-#         header = True if i == 0 else False
-        
-#         df.to_csv(saida, mode=modo, index=False, header=header, encoding='utf-8-sig', sep=';')
-#         print(f" -> Aba '{nome_aba}' adicionada.")
-
-#     print(f"\nPronto! Arquivo gerado: {saida}")
-
-# if __name__ == "__main__":
-#     converter()
-
-

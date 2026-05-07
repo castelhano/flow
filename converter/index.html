@@ -138,7 +138,7 @@
         <a href="../dashboard.html" class="btn btn-ghost">
             <i data-lucide="arrow-left"></i> Voltar
         </a>
-        <div class="logo">
+        <div class="logo" onclick="copyAppPath()">
             <div class="logo-icon">
                 <i data-lucide="repeat"></i>
             </div>
@@ -222,12 +222,14 @@
     </section>
 
 </div>
+<script src="../static/js/util.js"></script>
 
 
 <script>
 const outputEl = document.getElementById('output');
 const btnRun   = document.getElementById('btnRun');
 const spinner  = document.getElementById('spinner');
+
 
 function log(msg, type = 'info') {
     const span = document.createElement('span');

@@ -110,7 +110,7 @@
         <a href="../dashboard.html" class="btn btn-ghost">
             <i data-lucide="arrow-left"></i> Voltar
         </a>
-        <div class="logo">
+        <div class="logo" onclick="copyAppPath()">
             <div class="logo-icon">
                 <i data-lucide="layers"></i>
             </div>
@@ -189,6 +189,7 @@
 ============================================================ -->
 <script src="settings.js"></script>
 <script src="engine.js"></script>
+<script src="../static/js/util.js"></script>
 <script>
 let textPadrao    = null;
 let textEscalinha = null;
