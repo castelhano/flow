@@ -38,12 +38,12 @@ const APP_CONFIG = {
                     "Integração Transporte": "Integracao"
                 },
                 linha: {
-                    // Adicionar exceções conforme identificado
-                    // Ex: "A14 - UNICO": "A14"
+                    // Mapeia linhas com identificação diferente para valor canonico
+                    // Pode ser usado para consolidar variantes na linha base, Ex: A06B -> A06
                 },
                 veiculo: {
                     // Exceções de numeração de frota entre arquivos
-                    // Ex: "01077": "1077"
+                    // Ex: "A1077": "1077"
                 }
             }
         },
@@ -70,8 +70,8 @@ const APP_CONFIG = {
                     "VPAR TRANSPORTES":                         "Vpar"
                 },
                 linha: {
-                    // Bilhetagem usa código numérico, GPS usa alfanumérico
-                    // Ambos convergem para o valor canônico (padrão GPS)
+                    // Mapeia linhas com identificação diferente para valor canonico
+                    // Pode ser usado para consolidar variantes na linha base, Ex: A06B -> A06
                     "902":  "A02",
                     "906":  "A06",
                     "907":  "A07",
@@ -81,6 +81,11 @@ const APP_CONFIG = {
                     "915":  "A15",
                     "922":  "A22",
                     "922B":  "A22B",
+                    "940":  "A40",
+                    "965":  "A65",
+                    "968":  "A68",
+                    "969":  "A69",
+                    "975":  "A75",
                 },
                 veiculo: {
                     // Exceções de numeração entre arquivos
@@ -188,7 +193,7 @@ const APP_CONFIG = {
             minPassageirosSuspeitos: 2,
 
             // Pontuação mínima para reportar a omissão como suspeita.
-            pontuacaoMinima: 20,
+            pontuacaoMinima: 40,
 
             // Percentual mínimo dos órfãos do veículo (dia inteiro) presentes na janela
             // da omissão para ativar o critério densidadeAlta.

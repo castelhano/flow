@@ -298,7 +298,7 @@ const Anomalies = {
             const mChegReal = this._toMin(v.chegadaReal);
 
             if (mPartPlan > 0 && mPartReal > 0) {
-                const delta = Math.abs(mPartReal - mPartPlan);
+                const delta = this._deltaMin(mPartPlan, mPartReal);
                 if (delta > tol.deltaInicioMin) {
                     score += pesos.deltaInicio;
                     criterios.push({ label: `Desvio de partida: ${delta} min (tolerância ${tol.deltaInicioMin} min)`, pts: pesos.deltaInicio });
@@ -306,7 +306,7 @@ const Anomalies = {
             }
 
             if (mChegPlan > 0 && mChegReal > 0) {
-                const delta = Math.abs(mChegReal - mChegPlan);
+                const delta = this._deltaMin(mChegPlan, mChegReal);
                 if (delta > tol.deltaFimMin) {
                     score += pesos.deltaFim;
                     criterios.push({ label: `Desvio de chegada: ${delta} min (tolerância ${tol.deltaFimMin} min)`, pts: pesos.deltaFim });
@@ -314,8 +314,8 @@ const Anomalies = {
             }
 
             if (mPartPlan > 0 && mChegPlan > 0 && mPartReal > 0 && mChegReal > 0) {
-                const cicloPlan = mChegPlan - mPartPlan;
-                const cicloReal = mChegReal - mPartReal;
+                const cicloPlan = (mChegPlan - mPartPlan + 1440) % 1440;
+                const cicloReal = (mChegReal - mPartReal + 1440) % 1440;
                 if (cicloPlan > 0 && cicloReal > 0) {
                     const delta = Math.abs(cicloReal - cicloPlan);
                     if (delta > tol.deltaCicloMin) {
@@ -967,6 +967,11 @@ const Anomalies = {
         const match = String(str).match(/(\d{2}):(\d{2})/);
         if (!match) return 0;
         return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+    },
+
+    _deltaMin(a, b) {
+        const diff = Math.abs(a - b);
+        return Math.min(diff, 1440 - diff);
     }
 
 };
