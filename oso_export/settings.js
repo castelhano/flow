@@ -64,7 +64,7 @@ const SETTINGS = {
     mapaTurnos: {
         '09:00': 1,
         '19:00': 2,
-        '99:00': 4, // sentinela — captura qualquer horário restante 
+        '99:00': 2, // sentinela — captura qualquer horário restante 
     },
 
     // ── Códigos de atividade ──────────────────────────────────────────────────
@@ -189,7 +189,7 @@ const SETTINGS = {
         { field: 'HORARIO_SAIDA',   size: 5,  pad: ' ', align: 'L', type: 'hour', resolve: (ctx) => ctx.trip.departure   },
         { field: 'HORARIO_CHEGADA', size: 5,  pad: ' ', align: 'L', type: 'hour', resolve: (ctx) => ctx.trip.arrival     },
         { field: 'COD_ATIVIDADE',   size: 2,  pad: '0', align: 'R',           resolve: (ctx) => ctx.trip.activity        },
-        { field: 'COD_LOCALIDADE',  size: 5,  pad: '0', align: 'R',           resolve: (ctx) => ctx.trip.localCode       },
-        { field: 'COD_LINHA',       size: 3,  pad: ' ', align: 'R',           resolve: (ctx) => ctx.trip.isExcecaoLinha ? ctx.trip.codLinha : '' },
+        { field: 'COD_LOCALIDADE',  size: 6,  pad: '0', align: 'R',           resolve: (ctx) => ctx.trip.localCode       },
+        { field: 'COD_LINHA',       size: 4,  pad: ' ', align: 'R',           resolve: (ctx) => ctx.trip.isExcecaoLinha ? ctx.trip.codLinha : '' },
     ],
 };

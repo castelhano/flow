@@ -244,7 +244,7 @@
             No Globus: <span style="color: var(--text);">Escala → Utilitários → Integrações →
             <span style="color: var(--accent);">Exporta escala (Goolsystem TXT)</span></span><br>
             Selecione a opção <b>Escala</b> e exporte um arquivo por dia de importação.<br>
-            <span style="color: var(--text-3);">* Edite <b>empresas.js</b> para adicionar ou modificar empresas no seletor.</span>
+            <span style="color: var(--text-3);">* Edite <b>settings.js</b> para configurar empresas e tolerâncias por linha.</span>
         </p>
     </div>
 
@@ -282,13 +282,6 @@
                                 <option value="P">Planejamento</option>
                                 <option value="E">Escala</option>
                             </select>
-                        </div>
-                        <div class="filter-group">
-                            <label>Tolerância</label>
-                            <div style="display: flex; align-items: center; gap: 6px;">
-                                <input type="number" id="id_tolerancia" min="1" max="100" value="50" style="width: 64px; min-width: unset;">
-                                <span style="font-family: var(--mono); font-size: 11px; color: var(--text-3);">%</span>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -338,10 +331,10 @@
 <!-- ============================================================
      SCRIPTS
 ============================================================ -->
-<script src="./src/empresas.js"></script>
+<script src="./src/settings.js"></script>
 <script>
-    for (key in company) {
-        document.getElementById('id_empresa').innerHTML += `<option value="${company[key]}">${company[key]}</option>`;
+    for (key in APP_CONFIG.company) {
+        document.getElementById('id_empresa').innerHTML += `<option value="${APP_CONFIG.company[key]}">${APP_CONFIG.company[key]}</option>`;
     }
 </script>
 <script src="./src/jszip.min.js"></script>
