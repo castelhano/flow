@@ -185,33 +185,14 @@ const APP_CONFIG = {
         omissoesComPax: {
             ativo: true,
 
-            // Extensão máxima da janela de busca além do intervalo planejado da omissão.
-            // Passageiros fora de [partidaPlanejada - max, chegadaPlanejada + max] são ignorados.
-            janelaAuditoriaMax: 25,
+            // Gap máximo em minutos entre o fim de uma omissão e o início da próxima
+            // para que sejam consideradas sequenciais (mesmo veículo, mesma tabela).
+            gapSequencialMax: 30,
 
-            // Mínimo de passageiros na janela para a omissão entrar na pontuação.
-            minPassageirosSuspeitos: 2,
-
-            // Pontuação mínima para reportar a omissão como suspeita.
-            pontuacaoMinima: 40,
-
-            // Percentual mínimo dos órfãos do veículo (dia inteiro) presentes na janela
-            // da omissão para ativar o critério densidadeAlta.
-            // Ex: veículo com 25 órfãos no dia, 22 na janela = 88% → critério ativo
-            densidadePercentualMinimo: 80,
-
-            pesos: {
-                matchLinha:             20,   // Linha planejada da omissão bate com linha dos passageiros
-                gapEntreViagens:        50,   // Omissão está entre duas viagens produtivas da mesma tabela
-                densidadeAlta:          30,   // Concentração de órfãos acima de densidadePercentualMinimo
-                foraTolerancia:         15,   // Passageiros na zona de tolerância (fora do intervalo planejado)
-                penalidadeLinhaIgnorada:-20   // Penalidade proporcional quando pax na janela são de linhas ignoradas
-            },
-
-            thresholds: {
-                alto:  80,
-                medio: 45
-            }
+            // Percentual mínimo de órfãos do veículo (para a linha) que deve cair
+            // na janela das omissões agrupadas para o veículo ser tratado como suspeito.
+            // Ex: carro com 20 órfãos na linha, 17 na janela = 85% → suspeito
+            densidadePercentualMinimo: 60,
         },
 
         editadasSuspeitas: {

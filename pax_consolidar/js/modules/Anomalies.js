@@ -5,9 +5,8 @@
 //   openModal()  → overlay full-screen com filtros de execução no topo
 //   _processar() → tabs (Omissões | Suspeitas) + filtros por tab + cards
 //
-// Cada card de omissão tem:
-//   • Collapse com passageiros alvo
-//   • Painel lateral com viagens do carro + linha de sugestão inserida
+// Omissões: agrupa por linha+tabela em cadeias sequenciais, infere
+//   veículo pela bilhetagem (% de órfãos do carro na janela do grupo)
 // ============================================================
 
 const Anomalies = {
@@ -132,92 +131,95 @@ const Anomalies = {
     // ==========================================================
 
     _analisarOmissoes(session, empresasSet) {
-        const cfg       = APP_CONFIG.anomalies.omissoesComPax;
-        const pesos     = cfg.pesos;
-        const janelaMax = cfg.janelaAuditoriaMax;
+        const cfg     = APP_CONFIG.anomalies.omissoesComPax;
+        const gapMax  = cfg.gapSequencialMax;
+        const densMin = cfg.densidadePercentualMinimo;
 
         const ignoradosIds = new Set((session.paxIgnorados || []).map(p => p.id));
         const orfaos = session.passageiros.filter(p =>
             !p.assigned && !ignoradosIds.has(p.id) && empresasSet.has(p.empresa)
         );
 
-        const produtivas = session.viagens.filter(v => !v.isOmissao && empresasSet.has(v.empresa));
-        const omissoes   = session.viagens.filter(v => v.isOmissao  && empresasSet.has(v.empresa));
-
-        const linhasIgnoradas = new Set(
-            (APP_CONFIG.fontes.bilhetagem.linhasIgnoradas || []).map(l => String(l).trim())
+        const omissoes = session.viagens.filter(v =>
+            v.isOmissao && empresasSet.has(v.empresa)
         );
-        const suspeitos = [];
 
-        for (const omissao of omissoes) {
-            const mInicio = this._toMin(omissao.partidaPlanejada);
-            const mFim    = this._toMin(omissao.chegadaPlanejada);
-
-            // Viagens produtivas da mesma tabela — usadas apenas para o critério de gap
-            const vizinhas = produtivas
-                .filter(v => v.tabela === omissao.tabela && v.empresa === omissao.empresa)
-                .sort((a, b) => a.mInicio - b.mInicio);
-            const anterior = vizinhas.filter(v => v.mFim   <= mInicio).pop();
-            const proxima  = vizinhas.find( v => v.mInicio >= mInicio);
-
-            // Todos os passageiros órfãos da empresa dentro da janela de tempo
-            const paxNaJanela = orfaos.filter(p =>
-                p.empresa === omissao.empresa &&
-                p.mHorario >= mInicio - janelaMax &&
-                p.mHorario <= mFim    + janelaMax
-            );
-
-            // Passageiros cuja linha bate com a omissão — base do critério principal
-            const paxDaLinha = paxNaJanela.filter(p => p.linha_consolidada === omissao.linha_base);
-
-            if (paxDaLinha.length < cfg.minPassageirosSuspeitos) continue;
-
-            let score = 0;
-            const criterios = [];
-
-            // Linha compatível — peso mais alto, quantidade real de pax na linha
-            score += pesos.matchLinha;
-            criterios.push({ label: `Linha ${omissao.linha_base} compatível (${paxDaLinha.length} pax)`, pts: pesos.matchLinha });
-
-            // Omissão entre viagens produtivas da mesma tabela
-            if (anterior && proxima) {
-                score += pesos.gapEntreViagens;
-                criterios.push({
-                    label: `Entre viagens produtivas da tabela ${omissao.tabela} ` +
-                           `(${anterior.partidaReal || anterior.partidaPlanejada} → ${proxima.partidaReal || proxima.partidaPlanejada})`,
-                    pts: pesos.gapEntreViagens
-                });
-            }
-
-            // Passageiros da linha fora do intervalo planejado mas dentro da tolerância
-            const paxNaBorda = paxDaLinha.filter(p => p.mHorario < mInicio || p.mHorario > mFim);
-            if (paxNaBorda.length > 0) {
-                score += pesos.foraTolerancia;
-                criterios.push({
-                    label: `${paxNaBorda.length} passageiro(s) na zona de tolerância (fora do intervalo planejado)`,
-                    pts: pesos.foraTolerancia
-                });
-            }
-
-            // Penalidade por linhas ignoradas (sobre o total da janela)
-            const paxIgnorados = paxDaLinha.filter(p => linhasIgnoradas.has(p.linha_consolidada));
-            if (paxIgnorados.length > 0) {
-                const penalidade = Math.round(pesos.penalidadeLinhaIgnorada * (paxIgnorados.length / paxDaLinha.length));
-                score += penalidade;
-                criterios.push({ label: `${paxIgnorados.length} pax de linha(s) ignorada(s) na janela`, pts: penalidade });
-            }
-
-            if (score < cfg.pontuacaoMinima) continue;
-
-            let nivel = "baixo";
-            if      (score >= cfg.thresholds.alto)  nivel = "alto";
-            else if (score >= cfg.thresholds.medio) nivel = "medio";
-
-            // paxNaJanela no card mostra só os da linha (relevantes para a omissão)
-            suspeitos.push({ omissao, paxNaJanela: paxDaLinha, score, nivel, mInicio, mFim, criterios });
+        // Agrupar por empresa + linha_base + tabela
+        const mapaGrupos = {};
+        for (const om of omissoes) {
+            const key = `${om.empresa}||${om.linha_base}||${om.tabela}`;
+            if (!mapaGrupos[key]) mapaGrupos[key] = [];
+            mapaGrupos[key].push(om);
         }
 
-        suspeitos.sort((a, b) => b.score - a.score);
+        const suspeitos = [];
+
+        for (const grupo of Object.values(mapaGrupos)) {
+            grupo.sort((a, b) => a.mInicio - b.mInicio);
+
+            // Dividir em cadeias sequenciais (gap entre fim e início de consecutivas < gapMax)
+            const cadeias = [];
+            let cadeia = [grupo[0]];
+            for (let i = 1; i < grupo.length; i++) {
+                const gap = grupo[i].mInicio - grupo[i - 1].mFim;
+                if (gap < gapMax) {
+                    cadeia.push(grupo[i]);
+                } else {
+                    cadeias.push(cadeia);
+                    cadeia = [grupo[i]];
+                }
+            }
+            cadeias.push(cadeia);
+
+            for (const chain of cadeias) {
+                const mInicioGrupo = chain[0].mInicio;
+                const mFimGrupo    = chain[chain.length - 1].mFim;
+                const linha_base   = chain[0].linha_base;
+                const empresa      = chain[0].empresa;
+
+                // Órfãos da mesma linha e empresa
+                const orfaosLinha = orfaos.filter(p =>
+                    p.empresa === empresa && p.linha_consolidada === linha_base
+                );
+
+                if (orfaosLinha.length === 0) continue;
+
+                // Agrupar por veículo (veiculo vem da bilhetagem)
+                const porVeiculo = {};
+                for (const p of orfaosLinha) {
+                    if (!p.veiculo) continue;
+                    if (!porVeiculo[p.veiculo]) porVeiculo[p.veiculo] = [];
+                    porVeiculo[p.veiculo].push(p);
+                }
+
+                const carrosSuspeitos = [];
+                for (const [veiculo, paxCarro] of Object.entries(porVeiculo)) {
+                    const paxNaJanela = paxCarro.filter(p =>
+                        p.mHorario >= mInicioGrupo && p.mHorario <= mFimGrupo
+                    );
+                    if (paxNaJanela.length === 0) continue;
+                    const percentual = Math.round((paxNaJanela.length / paxCarro.length) * 100);
+                    if (percentual >= densMin) {
+                        carrosSuspeitos.push({ veiculo, paxNaJanela, totalOrfaos: paxCarro, percentual });
+                    }
+                }
+
+                if (carrosSuspeitos.length === 0) continue;
+
+                carrosSuspeitos.sort((a, b) => b.percentual - a.percentual);
+
+                suspeitos.push({
+                    omissoes: chain,
+                    linha_base,
+                    empresa,
+                    tabela: chain[0].tabela,
+                    mInicioGrupo,
+                    mFimGrupo,
+                    carrosSuspeitos
+                });
+            }
+        }
+
         return suspeitos;
     },
 
@@ -232,7 +234,7 @@ const Anomalies = {
         const pesos = cfg.pesos;
 
         const editadas = session.viagens.filter(v =>
-            v.isEditada && empresasSet.has(v.empresa)
+            v.isEditada && !v.isOmissao && empresasSet.has(v.empresa)
         );
 
         const suspeitas = [];
@@ -385,10 +387,9 @@ const Anomalies = {
         const labelStyle  = `style="font-size:0.65rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-3); margin-bottom:4px;"`;
 
         if (tipo === 'omissoes') {
-            const empresas = [...new Set(items.map(s => s.omissao.empresa))].sort();
-            const linhas   = [...new Set(items.map(s => s.omissao.linha_base))].sort();
-
-            const mkOpts = arr => arr.map(v => `<option value="${v}">${v}</option>`).join("");
+            const empresas = [...new Set(items.map(s => s.empresa))].sort();
+            const linhas   = [...new Set(items.map(s => s.linha_base))].sort();
+            const mkOpts   = arr => arr.map(v => `<option value="${v}">${v}</option>`).join("");
 
             return `
                 <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;
@@ -491,97 +492,114 @@ const Anomalies = {
     // ==========================================================
 
     _htmlCardOmissao(s, idx) {
-        const corNivel = { alto: "var(--danger)", medio: "var(--warning)", baixo: "var(--text-2)" };
-        const cor      = corNivel[s.nivel];
-        const label    = s.nivel.charAt(0).toUpperCase() + s.nivel.slice(1);
-        const key      = `o_${idx}`;
-        const nPax     = s.paxNaJanela.length;
-        const labelPaxClosed = `Ver ${nPax} passageiro${nPax !== 1 ? 's' : ''} ▼`;
+        const key     = `o_${idx}`;
+        const nOm     = s.omissoes.length;
+        const hInicio = s.omissoes[0].partidaPlanejada.substring(0, 5);
+        const hFim    = s.omissoes[nOm - 1].chegadaPlanejada.substring(0, 5);
+        const omLabel = nOm > 1 ? `${nOm} omissões agrupadas` : `1 omissão`;
 
-        const badges = s.criterios.map(c => {
-            const ptsCor   = c.pts < 0 ? "var(--danger)" : cor;
-            const ptsLabel = c.pts >= 0 ? `+${c.pts}` : `${c.pts}`;
-            return `
-                <span style="display:inline-flex; align-items:center; justify-content:space-between; gap:5px;
-                             background:var(--bg-4); border:1px solid var(--border); border-radius:4px;
-                             padding:3px 8px; font-size:0.76rem; color:var(--text-2); white-space:nowrap;">
-                    ${c.label}
-                    <span style="font-weight:600; color:${ptsCor}; margin-left:6px;">${ptsLabel}</span>
-                </span>
-            `;
-        }).join("");
+        const carrosHtml = s.carrosSuspeitos.map((carro, cIdx) => {
+            const colKey   = `${key}-${cIdx}`;
+            const nJanela  = carro.paxNaJanela.length;
+            const nTotal   = carro.totalOrfaos.length;
+            const pctColor = carro.percentual >= 90 ? "var(--danger)"
+                           : carro.percentual >= 70 ? "var(--warning)"
+                           :                          "var(--accent)";
 
-        const paxRows = s.paxNaJanela.map(p => {
-            const dentroIntervalo = p.mHorario >= s.mInicio && p.mHorario <= s.mFim;
-            const style = !dentroIntervalo ? "color:var(--text-3); font-style:italic;" : "color:var(--text-2);";
+            const paxRows = carro.paxNaJanela
+                .slice()
+                .sort((a, b) => a.mHorario - b.mHorario)
+                .map(p => `
+                    <tr>
+                        <td style="padding:4px 10px; font-family:var(--mono); color:var(--text-2);">${p.horario}</td>
+                        <td style="padding:4px 10px; color:var(--text-2);">${p.linha_consolidada}</td>
+                        <td style="padding:4px 10px; color:var(--text-3);">${p.tipo || "—"}</td>
+                    </tr>
+                `).join("");
+
             return `
-                <tr>
-                    <td style="padding:4px 10px; font-family:var(--mono); ${style}">${p.horario}</td>
-                    <td style="padding:4px 10px; ${style}">${p.linha_consolidada}</td>
-                    <td style="padding:4px 10px; ${style}">${p.tipo || "—"}</td>
-                </tr>
+                <div id="ac-carro-${colKey}"
+                    style="border:1px solid var(--border); border-radius:5px; padding:10px 14px;
+                           margin-bottom:8px; background:var(--bg-2);">
+
+                    <div style="display:flex; justify-content:space-between; align-items:center;
+                                flex-wrap:wrap; gap:8px;">
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <span style="font-weight:700; font-size:0.9rem;">Carro ${carro.veiculo}</span>
+                            <span style="font-weight:700; color:${pctColor}; font-size:0.88rem; font-family:var(--mono);">
+                                ${carro.percentual}%
+                            </span>
+                            <span style="font-size:0.78rem; color:var(--text-3);">
+                                ${nJanela} de ${nTotal} órfão${nTotal !== 1 ? 's' : ''} na janela
+                            </span>
+                        </div>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                            <button id="ac-col-btn-${colKey}"
+                                data-label-closed="Ver passageiros ▼"
+                                onclick="Anomalies._toggleCollapse('${colKey}')"
+                                class="btn btn-ghost" style="font-size:0.76rem; padding:4px 10px;">
+                                Ver passageiros ▼
+                            </button>
+                            <button onclick="Anomalies._atribuirCarro('${key}', ${cIdx})"
+                                class="btn btn-primary" style="font-size:0.76rem; padding:4px 10px;">
+                                Atribuir
+                            </button>
+                            <button onclick="Anomalies._ignorarCarro('ac-carro-${colKey}')"
+                                class="btn btn-ghost" style="font-size:0.76rem; padding:4px 10px;">
+                                Ignorar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="ac-col-${colKey}" style="display:none; margin-top:10px;
+                         border-top:1px solid var(--border); padding-top:10px;">
+                        <div style="max-height:200px; overflow-y:auto; border:1px solid var(--border); border-radius:4px;">
+                            <table style="width:100%; font-size:0.8rem; border-collapse:collapse;">
+                                <thead>
+                                    <tr style="background:var(--bg-3); text-align:left;">
+                                        <th style="padding:5px 10px; color:var(--text-3); font-size:0.7rem; border-bottom:1px solid var(--border);">Horário</th>
+                                        <th style="padding:5px 10px; color:var(--text-3); font-size:0.7rem; border-bottom:1px solid var(--border);">Linha</th>
+                                        <th style="padding:5px 10px; color:var(--text-3); font-size:0.7rem; border-bottom:1px solid var(--border);">Tipo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${paxRows}</tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
             `;
         }).join("");
 
         return `
             <div id="anomalies-card-${key}"
                 data-tipo="omissao"
-                data-empresa="${s.omissao.empresa}"
-                data-linha="${s.omissao.linha_base}"
+                data-empresa="${s.empresa}"
+                data-linha="${s.linha_base}"
                 style="border:1px solid var(--border); border-radius:6px; padding:14px; margin-bottom:10px;">
 
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
-                    <div>
-                        <span style="font-weight:600;">${s.omissao.linha}</span>
-                        <span style="color:var(--text-3); font-size:0.82rem; margin-left:8px;">${s.omissao.empresa}</span>
-                        <span style="font-family:var(--mono); font-size:0.82rem; color:var(--text-2); margin-left:12px;">
-                            ${s.omissao.partidaPlanejada} → ${s.omissao.chegadaPlanejada}
+                <div style="display:flex; justify-content:space-between; align-items:center;
+                            margin-bottom:12px; flex-wrap:wrap; gap:6px;">
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <span style="font-weight:600;">${s.omissoes[0].linha}</span>
+                        <span style="color:var(--text-3); font-size:0.82rem;">${s.empresa}</span>
+                        <span style="font-size:0.78rem; color:var(--text-3);">Tab. ${s.tabela}</span>
+                        <span style="font-family:var(--mono); font-size:0.82rem; color:var(--text-2);">
+                            ${hInicio} → ${hFim}
                         </span>
                     </div>
-                    <span style="color:${cor}; font-weight:700; font-size:0.82rem; white-space:nowrap; margin-left:12px;">
-                        ${label}&nbsp;&nbsp;${s.score} pts
+                    <span style="font-size:0.76rem; color:var(--text-3); white-space:nowrap;">
+                        ${omLabel}
                     </span>
                 </div>
 
-                <div style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:12px;">
-                    ${badges}
-                </div>
+                ${carrosHtml}
 
-                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                    <button id="anomalies-col-btn-${key}"
-                        data-label-closed="${labelPaxClosed}"
-                        onclick="Anomalies._toggleCollapse('${key}')"
-                        class="btn btn-ghost" style="font-size:0.78rem;">
-                        ${labelPaxClosed}
-                    </button>
-                    <button onclick="Anomalies._atribuirTodosOmissao('${key}')"
-                        class="btn btn-primary" style="font-size:0.78rem;">
-                        Atribuir Todos
-                    </button>
+                <div style="margin-top:6px;">
                     <button onclick="Anomalies._ignorarCard('anomalies-card-${key}')"
-                        class="btn btn-ghost" style="font-size:0.78rem;">
-                        Ignorar
+                        class="btn btn-ghost" style="font-size:0.76rem;">
+                        Ignorar tudo
                     </button>
-                </div>
-
-                <!-- Collapse: passageiros -->
-                <div id="anomalies-col-${key}" style="display:none; margin-top:12px;
-                     border-top:1px solid var(--border); padding-top:12px;">
-                    <div style="max-height:220px; overflow-y:auto; border:1px solid var(--border); border-radius:4px;">
-                        <table style="width:100%; font-size:0.8rem; border-collapse:collapse;">
-                            <thead>
-                                <tr style="background:var(--bg-3); text-align:left;">
-                                    <th style="padding:5px 10px; color:var(--text-3); font-size:0.7rem; border-bottom:1px solid var(--border);">Horário</th>
-                                    <th style="padding:5px 10px; color:var(--text-3); font-size:0.7rem; border-bottom:1px solid var(--border);">Linha</th>
-                                    <th style="padding:5px 10px; color:var(--text-3); font-size:0.7rem; border-bottom:1px solid var(--border);">Tipo</th>
-                                </tr>
-                            </thead>
-                            <tbody>${paxRows}</tbody>
-                        </table>
-                    </div>
-                    <p style="font-size:0.74rem; color:var(--text-3); margin:6px 0 0; font-style:italic;">
-                        Em itálico: fora do intervalo planejado mas dentro da janela de tolerância.
-                    </p>
                 </div>
 
             </div>
@@ -650,145 +668,46 @@ const Anomalies = {
 
 
     // ==========================================================
-    // PAINEL LATERAL — viagens do carro + sugestão inserida
-    // ==========================================================
-
-    _htmlViagensCarro(s) {
-        const session = AppState.session;
-        if (!session) return "";
-
-        const viagens = session.viagens
-            .filter(v => v.veiculo === s.veiculoInferido)
-            .sort((a, b) => a.mInicio - b.mInicio);
-
-        // Sugestão: a omissão inserida na ordem cronológica
-        const sugestao = {
-            _isSugestao:      true,
-            linha_base:       s.omissao.linha_base,
-            mInicio:          s.mInicio,
-            mFim:             s.mFim,
-            partidaReal:      s.omissao.partidaPlanejada,
-            chegadaReal:      s.omissao.chegadaPlanejada,
-            paxEfetivos:      s.paxNaJanela,
-            isOmissao:        false,
-            convertidaDeOmissao: false,
-            isEditada:        false
-        };
-
-        const merged = [...viagens];
-        const insertAt = merged.findIndex(v => v.mInicio > s.mInicio);
-        if (insertAt === -1) merged.push(sugestao);
-        else merged.splice(insertAt, 0, sugestao);
-
-        const rows = merged.map(v => {
-            if (v._isSugestao) {
-                return `
-                    <tr style="background:rgba(59,130,246,0.1);">
-                        <td style="padding:4px 8px; border-left:3px solid var(--accent); color:var(--accent); font-weight:600;">
-                            ${v.linha_base}
-                            <span style="font-size:0.65rem; background:var(--accent); color:white;
-                                         padding:1px 4px; border-radius:3px; margin-left:4px; vertical-align:middle;">
-                                SUGESTÃO
-                            </span>
-                        </td>
-                        <td style="padding:4px 8px; font-family:var(--mono); color:var(--accent);">${(v.partidaReal||"").substring(0,5)}</td>
-                        <td style="padding:4px 8px; font-family:var(--mono); color:var(--accent);">${(v.chegadaReal||"").substring(0,5)}</td>
-                        <td style="padding:4px 8px; color:var(--text-3);">—</td>
-                        <td style="padding:4px 8px; color:var(--accent); font-weight:600;">${v.paxEfetivos.length}</td>
-                    </tr>
-                `;
-            }
-
-            const hIni      = v.isOmissao ? v.partidaPlanejada : v.partidaReal;
-            const hFim      = v.isOmissao ? v.chegadaPlanejada : v.chegadaReal;
-            const tipoBadge = v.isOmissao
-                ? `<span style="color:var(--danger); font-size:0.7rem; margin-left:3px;">[O]</span>`
-                : v.convertidaDeOmissao
-                ? `<span style="color:var(--success); font-size:0.7rem; margin-left:3px;">[C]</span>`
-                : "";
-            const editadoCell = v.isEditada
-                ? `<span style="color:var(--warning); font-weight:600;">Sim</span>`
-                : `<span style="color:var(--text-3);">—</span>`;
-
-            return `
-                <tr style="${v.isEditada ? 'background:rgba(245,158,11,0.07);' : ''}">
-                    <td style="padding:4px 8px;">${v.linha_base}${tipoBadge}</td>
-                    <td style="padding:4px 8px; font-family:var(--mono);">${(hIni||"").substring(0,5)}</td>
-                    <td style="padding:4px 8px; font-family:var(--mono);">${(hFim||"").substring(0,5)}</td>
-                    <td style="padding:4px 8px;">${editadoCell}</td>
-                    <td style="padding:4px 8px;">${v.paxEfetivos.length}</td>
-                </tr>
-            `;
-        }).join("");
-
-        return `
-            <div style="font-size:0.82rem; color:var(--text-2); margin-bottom:8px;">
-                Viagens do carro <strong style="color:var(--text);">${s.veiculoInferido}</strong>
-                <span style="font-size:0.74rem; color:var(--text-3); margin-left:6px;">
-                    (linha em azul = sugestão de inclusão)
-                </span>
-            </div>
-            <div style="max-height:380px; overflow-y:auto; border:1px solid var(--border); border-radius:4px;">
-                <table style="width:100%; font-size:0.78rem; border-collapse:collapse;">
-                    <thead>
-                        <tr style="text-align:left; background:var(--bg-3); position:sticky; top:0;">
-                            <th style="padding:5px 8px; color:var(--text-3); font-size:0.7rem; border-bottom:1px solid var(--border);">Linha</th>
-                            <th style="padding:5px 8px; color:var(--text-3); font-size:0.7rem; border-bottom:1px solid var(--border);">Início</th>
-                            <th style="padding:5px 8px; color:var(--text-3); font-size:0.7rem; border-bottom:1px solid var(--border);">Fim</th>
-                            <th style="padding:5px 8px; color:var(--text-3); font-size:0.7rem; border-bottom:1px solid var(--border);">Editado</th>
-                            <th style="padding:5px 8px; color:var(--text-3); font-size:0.7rem; border-bottom:1px solid var(--border);">Pax</th>
-                        </tr>
-                    </thead>
-                    <tbody style="color:var(--text-2);">${rows}</tbody>
-                </table>
-            </div>
-        `;
-    },
-
-
-    // ==========================================================
     // AÇÕES DE UI
     // ==========================================================
 
     _toggleCollapse(key) {
-        const el  = document.getElementById(`anomalies-col-${key}`);
-        const btn = document.getElementById(`anomalies-col-btn-${key}`);
+        const el  = document.getElementById(`ac-col-${key}`);
+        const btn = document.getElementById(`ac-col-btn-${key}`);
         if (!el) return;
         const open = el.style.display !== 'none';
         el.style.display = open ? 'none' : 'block';
         if (btn) btn.textContent = open ? btn.dataset.labelClosed : 'Recolher ▲';
     },
 
-    _toggleViagensCarro(key) {
-        const panel = document.getElementById(`anomalies-viagens-${key}`);
-        const btn   = document.getElementById(`anomalies-viagens-btn-${key}`);
-        if (!panel) return;
-
-        const open = panel.style.display !== 'none';
-
-        if (open) {
-            panel.style.display = 'none';
-            if (btn) btn.textContent = btn.dataset.labelClosed;
-        } else {
-            // Lazy render
-            if (!panel.dataset.loaded) {
-                const s = this._pendentes[key];
-                if (s) panel.innerHTML = this._htmlViagensCarro(s);
-                panel.dataset.loaded = '1';
-            }
-            panel.style.display = 'block';
-            if (btn) btn.textContent = '◀ Fechar viagens';
-        }
-    },
-
-    _atribuirTodosOmissao(key) {
+    _atribuirCarro(key, carroIdx) {
         const s = this._pendentes[key];
         if (!s) return;
-        const paxIds = s.paxNaJanela.map(p => p.id);
-        Engine.atribuirManualmente(AppState.session, paxIds, s.omissao.id);
+        const carro = s.carrosSuspeitos[carroIdx];
+        if (!carro) return;
+
+        // Distribui pax para a omissão cujo intervalo os contém; restantes vão para a primeira
+        const atribuidos = new Set();
+        for (const om of s.omissoes) {
+            const paxDaOm = carro.paxNaJanela.filter(p =>
+                !atribuidos.has(p.id) && p.mHorario >= om.mInicio && p.mHorario <= om.mFim
+            );
+            if (paxDaOm.length > 0) {
+                Engine.atribuirManualmente(AppState.session, paxDaOm.map(p => p.id), om.id);
+                paxDaOm.forEach(p => atribuidos.add(p.id));
+            }
+        }
+        const restantes = carro.paxNaJanela.filter(p => !atribuidos.has(p.id));
+        if (restantes.length > 0) {
+            Engine.atribuirManualmente(AppState.session, restantes.map(p => p.id), s.omissoes[0].id);
+        }
+
         UIController.updateDashboard(AppState.session);
-        this._ignorarCard(`anomalies-card-${key}`);
-        delete this._pendentes[key];
+        document.getElementById(`ac-carro-${key}-${carroIdx}`)?.remove();
+    },
+
+    _ignorarCarro(carroId) {
+        document.getElementById(carroId)?.remove();
     },
 
     _ignorarCard(cardId) {
@@ -804,22 +723,24 @@ const Anomalies = {
         const visibles = [...document.querySelectorAll('[data-tipo="omissao"]')]
             .filter(c => c.style.display !== 'none');
 
-        const rows = [['Empresa', 'Linha', 'Início Plan', 'Fim Plan',
-                        'Nível', 'Score', 'Pax na Janela', 'Critérios']];
+        const rows = [['Empresa', 'Linha', 'Tabela', 'Início Janela', 'Fim Janela',
+                        'N Omissões', 'Carros Suspeitos', 'Percentuais', 'Pax na Janela']];
 
         for (const card of visibles) {
             const key = card.id.replace('anomalies-card-', '');
             const s   = this._pendentes[key];
             if (!s) continue;
+            const nOm = s.omissoes.length;
             rows.push([
-                s.omissao.empresa,
-                s.omissao.linha,
-                s.omissao.partidaPlanejada,
-                s.omissao.chegadaPlanejada,
-                s.nivel,
-                s.score,
-                s.paxNaJanela.length,
-                s.criterios.map(c => `${c.label} (${c.pts >= 0 ? '+' : ''}${c.pts})`).join(' | ')
+                s.empresa,
+                s.linha_base,
+                s.tabela,
+                s.omissoes[0].partidaPlanejada,
+                s.omissoes[nOm - 1].chegadaPlanejada,
+                nOm,
+                s.carrosSuspeitos.map(c => c.veiculo).join('; '),
+                s.carrosSuspeitos.map(c => `${c.percentual}%`).join('; '),
+                s.carrosSuspeitos.map(c => c.paxNaJanela.length).join('; ')
             ]);
         }
 
