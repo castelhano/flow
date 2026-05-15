@@ -108,10 +108,10 @@ const APP_CONFIG = {
     empresas: {
         rapido:      { id: 1, nome: "Rapido",        abbr: "RC", defCorte: true , defConciliacao: true ,  nomeCompleto: "Rápido Cuiabá"                   },
         vpar:        { id: 2, nome: "Vpar",          abbr: "VP", defCorte: true , defConciliacao: true ,  nomeCompleto: "VPAR Transportes"                },
-        caribus:     { id: 3, nome: "Caribus",       abbr: "CB", defCorte: true , defConciliacao: false,  nomeCompleto: "Caribus Transportes"             },
+        caribus:     { id: 3, nome: "Caribus",       abbr: "CB", defCorte: true , defConciliacao: true ,  nomeCompleto: "Caribus Transportes"             },
         cmt:         { id: 4, nome: "CMT",           abbr: "CM", defCorte: false, defConciliacao: false,  nomeCompleto: "CMT Urbano"                      },
         consorcio:   { id: 5, nome: "Consorcio Met", abbr: "CO", defCorte: false, defConciliacao: false,  nomeCompleto: "Consórcio Metropolitano Transp"  },
-        integracao:  { id: 6, nome: "Integracao",    abbr: "IN", defCorte: true , defConciliacao: false,  nomeCompleto: "Integração Transportes"          },
+        integracao:  { id: 6, nome: "Integracao",    abbr: "IN", defCorte: true , defConciliacao: true ,  nomeCompleto: "Integração Transportes"          },
         termCuiaba:  { id: 7, nome: "Term Cuiaba",   abbr: "TC", defCorte: false, defConciliacao: false,  nomeCompleto: "MTU-Cuiabá"                      },
         termVG:      { id: 8, nome: "Term VG",       abbr: "TV", defCorte: false, defConciliacao: false,  nomeCompleto: "MTU-Várzea Grande"               },
         uniao:       { id: 9, nome: "Uniao",         abbr: "UN", defCorte: false, defConciliacao: false,  nomeCompleto: "União VZG Transportes"           }
