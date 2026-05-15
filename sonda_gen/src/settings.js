@@ -10,12 +10,13 @@ var APP_CONFIG = {
     autoSelectCompany: true,
 
     // Tolerância padrão aplicada a todas as linhas (percentual do ciclo)
-    toleranciaDefault: 50,
+    toleranciaDefault: 15,
 
     // Override de tolerância por linha — deixe vazio {} para usar somente o padrão
     // Exemplo: { '205': 30, 'A22': 20 }
     toleranciaLinhas: {
-        'A22B': 5,
+        'A22B': 50,
+        'A02': 50
     },
 
 };
