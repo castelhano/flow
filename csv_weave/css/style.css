@@ -1,0 +1,303 @@
+/* ============================================================
+   TOPBAR — encoding selector
+============================================================ */
+#encoding-group {
+    margin: 0;
+}
+
+#encoding-group select {
+    height: 32px;
+    min-width: 110px;
+}
+
+/* ============================================================
+   ETAPA 1 — DROP ZONE PRINCIPAL
+============================================================ */
+.drop-zone-main {
+    border: 1px dashed var(--border-hi);
+    border-radius: var(--radius-lg);
+    padding: 48px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    background: var(--muted-dim);
+    text-align: center;
+}
+
+.drop-zone-main:hover,
+.drop-zone-main.drag-over {
+    border-color: var(--accent);
+    background: var(--accent-glow);
+}
+
+.drop-zone-main svg {
+    width: 32px; height: 32px;
+    color: var(--text-3);
+    transition: color .2s;
+}
+
+.drop-zone-main:hover svg,
+.drop-zone-main.drag-over svg {
+    color: var(--accent);
+}
+
+.drop-zone-main strong {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.drop-zone-main p {
+    font-size: 12px;
+    color: var(--text-3);
+    font-family: var(--mono);
+}
+
+.drop-zone-main .drop-hint {
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--text-3);
+}
+
+.mono-tag {
+    color: var(--accent);
+    background: var(--accent-glow);
+    border: 1px solid rgba(59,130,246,.2);
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+}
+
+/* ============================================================
+   LISTA DE ARQUIVOS CARREGADOS
+============================================================ */
+.files-list {
+    margin-top: 16px;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+}
+
+.files-list-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.files-list-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    flex: 1;
+}
+
+#files-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.file-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-3);
+    border: 1px solid var(--border-hi);
+    border-radius: var(--radius);
+    padding: 6px 10px 6px 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    animation: fadeSlide .2s ease;
+}
+
+.file-chip.has-fk {
+    border-color: var(--accent);
+    background: var(--accent-glow);
+}
+
+.file-chip-name {
+    color: var(--text);
+    font-weight: 700;
+}
+
+.file-chip-rows {
+    color: var(--text-3);
+    font-size: 10px;
+}
+
+.file-chip-remove {
+    background: none;
+    border: none;
+    color: var(--text-3);
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    border-radius: 3px;
+    transition: color .15s;
+}
+
+.file-chip-remove:hover { color: var(--danger); }
+.file-chip-remove svg   { width: 12px; height: 12px; }
+
+/* ============================================================
+   ETAPA 2 — SCHEMA
+============================================================ */
+.schema-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px;
+}
+
+.schema-card {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    animation: fadeSlide .25s ease;
+}
+
+.schema-card-header {
+    background: var(--bg-3);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.schema-card-header svg {
+    width: 13px; height: 13px;
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.schema-entity-name {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    flex: 1;
+}
+
+.schema-row-count {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-3);
+}
+
+.schema-card-body {
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.schema-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-2);
+    padding: 2px 0;
+}
+
+.schema-field svg {
+    width: 11px; height: 11px;
+    flex-shrink: 0;
+    color: var(--text-3);
+}
+
+.schema-field.is-fk {
+    color: var(--warning);
+}
+
+.schema-field.is-fk svg {
+    color: var(--warning);
+}
+
+.schema-fk-target {
+    color: var(--text-3);
+    font-size: 10px;
+}
+
+/* ============================================================
+   ETAPA 3 — RESULTADO
+============================================================ */
+.result-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 12px;
+}
+
+.result-card {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    animation: fadeSlide .25s ease;
+}
+
+.result-card-header {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-3);
+}
+
+.result-entity-name {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+    flex: 1;
+}
+
+.result-count {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--success);
+}
+
+.result-card-body {
+    padding: 12px 16px;
+}
+
+.result-preview {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-3);
+    max-height: 140px;
+    overflow: auto;
+    white-space: pre;
+    margin-bottom: 10px;
+    line-height: 1.6;
+}
+
+.result-preview .json-key    { color: var(--accent); }
+.result-preview .json-string { color: var(--success); }
+.result-preview .json-number { color: var(--warning); }
+.result-preview .json-null   { color: var(--danger); }
+
+.result-card-footer {
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}

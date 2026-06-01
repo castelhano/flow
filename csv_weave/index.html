@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSV Weave</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../static/css/app.css">
+<link rel="stylesheet" href="css/style.css">
+<script src="vendor/papaparse.min.js"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+
+<!-- ============================================================
+     TOPBAR
+============================================================ -->
+<header id="topbar">
+    <div class="topbar-left">
+        <a href="../dashboard.html" class="btn btn-ghost">
+            <i data-lucide="arrow-left"></i> Voltar
+        </a>
+        <div class="logo">
+            <div class="logo-icon">
+                <i data-lucide="git-merge"></i>
+            </div>
+            CSV <span class="logo-sub">WEAVE</span>
+        </div>
+    </div>
+    <div id="topbar-right">
+        <span id="status-badge">Aguardando arquivos...</span>
+        <div class="filter-group" id="encoding-group">
+            <select id="select-encoding">
+                <option value="UTF-8">UTF-8</option>
+                <option value="ISO-8859-1">ISO-8859-1</option>
+            </select>
+        </div>
+        <button id="btn-converter" class="btn btn-primary hidden">
+            <i data-lucide="zap"></i> Converter
+        </button>
+    </div>
+</header>
+
+
+<div id="app">
+
+    <!-- ========================================================
+         ETAPA 1 — IMPORTAÇÃO
+    ======================================================== -->
+    <section id="section-import">
+        <div class="etapa-label">
+            <span class="etapa-num">ETAPA 01</span>
+            <span class="etapa-title">Importar arquivos CSV</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <div class="card">
+            <div id="drop-zone-main" class="drop-zone-main">
+                <input type="file" id="input-csvs" class="hidden" accept=".csv" multiple>
+                <i data-lucide="upload-cloud"></i>
+                <strong>Arraste os arquivos CSV aqui</strong>
+                <p>Cada arquivo define uma entidade — o nome do arquivo será o nome do objeto no JSON</p>
+                <p class="drop-hint">ex: <span class="mono-tag">funcionario.csv</span>, <span class="mono-tag">contrato.csv</span></p>
+            </div>
+
+            <div id="files-list" class="files-list hidden">
+                <div class="files-list-header">
+                    <span class="files-list-title">Arquivos carregados</span>
+                    <button id="btn-add-more" class="btn btn-ghost" style="height:28px; font-size:10px;">
+                        <i data-lucide="plus"></i> Adicionar mais
+                    </button>
+                    <input type="file" id="input-csvs-more" class="hidden" accept=".csv" multiple>
+                </div>
+                <div id="files-chips"></div>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- ========================================================
+         ETAPA 2 — SCHEMA DETECTADO
+    ======================================================== -->
+    <section id="section-schema" class="hidden">
+        <div class="etapa-label">
+            <span class="etapa-num">ETAPA 02</span>
+            <span class="etapa-title">Schema detectado</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <div id="schema-grid" class="schema-grid"></div>
+    </section>
+
+
+    <!-- ========================================================
+         ETAPA 3 — RESULTADO
+    ======================================================== -->
+    <section id="section-result" class="hidden">
+        <div class="etapa-label">
+            <span class="etapa-num">ETAPA 03</span>
+            <span class="etapa-title">Resultado</span>
+            <div class="etapa-sep"></div>
+            <button id="btn-download-all" class="btn btn-success" style="height:32px;">
+                <i data-lucide="archive"></i> Download ZIP
+            </button>
+        </div>
+
+        <div id="result-grid" class="result-grid"></div>
+    </section>
+
+</div><!-- #app -->
+
+
+<!-- ============================================================
+     LOADER
+============================================================ -->
+<div id="loader" class="hidden">
+    <div class="spinner"></div>
+    <p id="loader-text">Processando...</p>
+</div>
+
+
+<!-- ============================================================
+     SCRIPTS
+============================================================ -->
+<script src="vendor/papaparse.min.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/Parser.js"></script>
+<script src="js/Engine.js"></script>
+<script src="js/UIController.js"></script>
+<script src="js/main.js"></script>
+
+<script>
+lucide.createIcons();
+
+// Drop zone principal
+const dropZone  = document.getElementById('drop-zone-main');
+const inputMain = document.getElementById('input-csvs');
+const inputMore = document.getElementById('input-csvs-more');
+
+dropZone.addEventListener('click',     () => inputMain.click());
+inputMain.addEventListener('click',    e  => e.stopPropagation());
+inputMain.addEventListener('change',   e  => { if (e.target.files.length) handleFilesAdded(e.target.files); });
+
+document.getElementById('btn-add-more').addEventListener('click', () => inputMore.click());
+inputMore.addEventListener('click',    e  => e.stopPropagation());
+inputMore.addEventListener('change',   e  => { if (e.target.files.length) handleFilesAdded(e.target.files); });
+
+dropZone.addEventListener('dragover',  e  => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop',      e  => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const csvFiles = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.csv'));
+    if (csvFiles.length) handleFilesAdded(csvFiles);
+});
+
+document.getElementById('btn-converter').addEventListener('click', runEngine);
+document.getElementById('btn-download-all').addEventListener('click', () => UIController.downloadZIP());
+</script>
+
+</body>
+</html>
