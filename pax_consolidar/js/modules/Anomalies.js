@@ -87,17 +87,110 @@ const Anomalies = {
                         </div>
                     </div>
 
+                    <!-- Consulta de viagens -->
+                    <div style="background:var(--bg-2); border:1px solid var(--border); border-radius:8px;
+                                padding:14px 20px; margin-bottom:28px;">
+                        <div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.08em;
+                                    color:var(--text-3); font-weight:600; margin-bottom:12px;">Consulta de viagens</div>
+                        <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+                            <div class="filter-group">
+                                <label>Veículo</label>
+                                <input type="text" id="anomalies-q-veiculo" placeholder="Ex: 1074"
+                                    style="width:90px; height:30px; font-size:0.82rem;">
+                            </div>
+                            <div class="filter-group">
+                                <label>Linha</label>
+                                <input type="text" id="anomalies-q-linha" placeholder="Ex: A14"
+                                    style="width:90px; height:30px; font-size:0.82rem;">
+                            </div>
+                            <div class="filter-group">
+                                <label>Status</label>
+                                <select id="anomalies-q-status" style="width:110px; height:30px; font-size:0.82rem;">
+                                    <option value="">Todos</option>
+                                    <option value="produtivo">Produtivo</option>
+                                    <option value="omissao">Omissão</option>
+                                    <option value="extra">Extra</option>
+                                    <option value="editada">Editada</option>
+                                </select>
+                            </div>
+                            <button onclick="Anomalies._buscarViagens()" class="btn btn-ghost"
+                                style="height:32px; align-self:flex-end;">
+                                <i data-lucide="search"></i>
+                            </button>
+                            <div class="filter-group" style="flex:1; min-width:240px;">
+                                <label>Viagem</label>
+                                <select id="anomalies-q-select"
+                                    style="width:100%; height:30px; font-size:0.78rem; font-family:var(--mono);">
+                                    <option value="">Use os filtros ao lado para buscar...</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Resultados (preenchido pelo _processar) -->
                     <div id="anomalies-resultados"></div>
 
                 </div>
             </div>
         `);
+        if (window.lucide) lucide.createIcons();
     },
 
     _fecharModal() {
         document.getElementById('anomalies-overlay')?.remove();
         document.body.classList.remove('modal-open');
+    },
+
+    _buscarViagens() {
+        const select  = document.getElementById('anomalies-q-select');
+        const fVeic   = document.getElementById('anomalies-q-veiculo')?.value.trim() || "";
+        const fLinha  = document.getElementById('anomalies-q-linha')?.value.toLowerCase().trim() || "";
+        const fStatus = document.getElementById('anomalies-q-status')?.value || "";
+
+        if (!AppState.session) return;
+        if (!fVeic && !fLinha) {
+            select.innerHTML = "<option value=''>Use os filtros ao lado para buscar...</option>";
+            return;
+        }
+
+        const viagens = AppState.session.viagens
+            .filter(v => {
+                const matchV = !fVeic   || String(v.veiculo).includes(fVeic);
+                const matchL = !fLinha  || v.linha.toLowerCase().includes(fLinha);
+                const matchS = !fStatus
+                    || (fStatus === "produtivo" && !v.isOmissao && !v.isExtra)
+                    || (fStatus === "omissao"   && v.isOmissao)
+                    || (fStatus === "extra"     && v.isExtra)
+                    || (fStatus === "editada"   && v.isEditada);
+                return matchV && matchL && matchS;
+            })
+            .sort((a, b) => {
+                if (a.linha_base !== b.linha_base) return a.linha_base.localeCompare(b.linha_base);
+                if (a.veiculo    !== b.veiculo)    return String(a.veiculo).localeCompare(String(b.veiculo));
+                const hA = a.isOmissao ? a.partidaPlanejada : a.partidaReal;
+                const hB = b.isOmissao ? b.partidaPlanejada : b.partidaReal;
+                return (hA || "").localeCompare(hB || "");
+            });
+
+        if (viagens.length === 0) {
+            select.innerHTML = "<option value=''>Nenhuma viagem encontrada.</option>";
+            return;
+        }
+
+        const pad = (v, n) => String(v ?? "").padStart(n, " ");
+        select.innerHTML = `<option value="">${viagens.length} viagem(ns) encontrada(s)</option>`
+            + viagens.map(v => {
+                const statusDef = Object.values(APP_CONFIG.engine.status).find(s => s.value === v.statusOriginal);
+                const abbr  = v.convertidaDeOmissao ? "C" : (statusDef?.abbr || "?");
+                const hIni  = v.isOmissao ? v.partidaPlanejada : v.partidaReal;
+                const hFim  = v.isOmissao ? v.chegadaPlanejada : v.chegadaReal;
+                const label = `[${abbr}] [${pad(v.veiculo || "------", 6)}] ${pad(v.linha_base, 5)} | `
+                    + `${pad(v.sentido, 5)} | ${(hIni || "").substring(0, 5)} às ${(hFim || "").substring(0, 5)} `
+                    + `[${String(v.tabela || "").padStart(2, " ")}] (${String(v.paxEfetivos.length).padStart(3, " ")} pax)`;
+                return `<option value="${v.id}">${label}</option>`;
+            }).join("");
+
+        if (window.lucide) lucide.createIcons();
     },
 
 
