@@ -59,10 +59,16 @@ const UIController = {
 
     atualizarFuncionalidadesDisponiveis() {
         const temGps = !!AppState.rawGps;
-        const temPax = !!AppState.rawPax;
+        const aindaLendo = AppState.loading.gps || AppState.loading.pax;
 
-        // Botão processar só aparece com GPS (bilhetagem é opcional)
-        if (temGps) this.showElement("btn-processar");
+        // Botão processar só aparece com GPS pronto (bilhetagem é opcional,
+        // mas se estiver sendo lida — ex: arquivo grande — espera terminar
+        // para não processar com AppState.rawPax ainda vazio).
+        if (temGps && !aindaLendo) {
+            this.showElement("btn-processar");
+        } else {
+            this.hideElement("btn-processar");
+        }
 
         // Seção de operações só com GPS processado
         // (será exibida pelo updateDashboard após processamento)

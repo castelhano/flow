@@ -22,7 +22,10 @@
 const AppState = {
     rawGps:  null,
     rawPax:  null,
-    session: null
+    session: null,
+    // Flags de leitura em andamento — evita liberar "Processar"
+    // enquanto um arquivo grande (ex: bilhetagem) ainda está sendo parseado.
+    loading: { gps: false, pax: false }
 };
 
 
@@ -66,6 +69,7 @@ function _validarCSV(rawData, tipo) {
         const val = String(row[idx] ?? "").trim();
         return def.regex.test(val);
     });
+    console.log(`[DEBUG _validarCSV] ${label} passou na validação. passaOutro (${outroLabel}):`, passaOutro);
     if (passaOutro) {
         throw new Error(
             `Arquivo de ${label} inválido: o arquivo selecionado parece ser o de ${outroLabel}.\n` +
@@ -80,6 +84,9 @@ function _validarCSV(rawData, tipo) {
 // Chamado pelo evento onchange dos inputs de arquivo
 // ----------------------------------------------------------
 async function handleFileSelect(tipo, file) {
+    AppState.loading[tipo === "gps" ? "gps" : "pax"] = true;
+    UIController.atualizarFuncionalidadesDisponiveis();
+
     try {
         UIController.setStatusBadge("Lendo arquivo...", "muted");
 
@@ -96,7 +103,6 @@ async function handleFileSelect(tipo, file) {
         // Atualiza badge e exibe botão de processar quando ambos estiverem prontos
         if (AppState.rawGps && AppState.rawPax) {
             UIController.setStatusBadge("Arquivos prontos!", "success");
-            UIController.showElement("btn-processar");
         } else {
             UIController.setStatusBadge(
                 `${tipo.toUpperCase()} carregado. Aguardando o outro arquivo...`,
@@ -104,12 +110,13 @@ async function handleFileSelect(tipo, file) {
             );
         }
 
-        // Se apenas um arquivo foi carregado, exibe as funcionalidades disponíveis
-        UIController.atualizarFuncionalidadesDisponiveis();
-
     } catch (err) {
         UIController.setStatusBadge("Erro ao ler arquivo.", "danger");
         alert(`Erro: ${err.message}`);
+    } finally {
+        AppState.loading[tipo === "gps" ? "gps" : "pax"] = false;
+        // Se apenas um arquivo foi carregado, exibe as funcionalidades disponíveis
+        UIController.atualizarFuncionalidadesDisponiveis();
     }
 }
 
@@ -132,6 +139,13 @@ function detectarEmpresas() {
         ? [...new Set(AppState.rawPax.map(r => normPax.normalize(r).empresa).filter(Boolean))].sort()
         : [...empresasGps];
 
+    console.log("[DEBUG detectarEmpresas] rawGps.length:", AppState.rawGps.length,
+        "| rawPax.length:", AppState.rawPax ? AppState.rawPax.length : null);
+    console.log("[DEBUG detectarEmpresas] amostra normalizada GPS[0]:", normGps.normalize(AppState.rawGps[0]));
+    if (AppState.rawPax) console.log("[DEBUG detectarEmpresas] amostra normalizada PAX[0]:", normPax.normalize(AppState.rawPax[0]));
+    console.log("[DEBUG detectarEmpresas] empresasGps:", empresasGps);
+    console.log("[DEBUG detectarEmpresas] empresasPax:", empresasPax);
+
     UIController.showSeletorEmpresas({ empresasPax, empresasGps, onConciliar: executarProcessamento });
 }
 
@@ -143,6 +157,9 @@ function detectarEmpresas() {
 // ----------------------------------------------------------
 function executarProcessamento({ empresasPax, empresasConciliacao }) {
     UIController.showLoader("Processando...");
+
+    console.log("[DEBUG executarProcessamento] empresasPax (painel 1, selecionadas):", empresasPax);
+    console.log("[DEBUG executarProcessamento] empresasConciliacao (painel 2, selecionadas):", empresasConciliacao);
 
     // setTimeout garante que o loader renderiza antes do processamento bloquear a thread
     setTimeout(() => {
@@ -167,14 +184,22 @@ function executarProcessamento({ empresasPax, empresasConciliacao }) {
                 .filter(r => empresasPaxSet.has(r.empresa));
 
             // Pax: apenas empresas do corte (painel 1)
-            const paxLimpo = AppState.rawPax
-                ? AppState.rawPax
-                    .map(r => normPax.normalize(r))
-                    .filter(r => empresasPaxSet.has(r.empresa))
-                : [];
+            const paxNormalizado = AppState.rawPax ? AppState.rawPax.map(r => normPax.normalize(r)) : [];
+            const paxLimpo = paxNormalizado.filter(r => empresasPaxSet.has(r.empresa));
+
+            console.log("[DEBUG executarProcessamento] gpsLimpo.length:", gpsLimpo.length,
+                "de", AppState.rawGps.length);
+            console.log("[DEBUG executarProcessamento] paxNormalizado.length:", paxNormalizado.length,
+                "| paxLimpo.length (pós filtro empresasPaxSet):", paxLimpo.length);
+            console.log("[DEBUG executarProcessamento] empresas distintas em paxNormalizado:",
+                [...new Set(paxNormalizado.map(p => p.empresa))]);
+            console.log("[DEBUG executarProcessamento] amostra paxNormalizado[0..2]:", paxNormalizado.slice(0, 3));
 
             const engine     = new Engine(gpsLimpo, paxLimpo);
             AppState.session = engine.process(empresasConciliacao);
+
+            console.log("[DEBUG executarProcessamento] session.resumo:", AppState.session.resumo);
+            console.log("[DEBUG executarProcessamento] session.empresasConciliadas:", AppState.session.empresasConciliadas);
 
             const empresasNoSession = [...new Set(AppState.session.viagens.map(v => v.empresa).filter(Boolean))].sort();
             UIController.showSeletorConciliacao(empresasNoSession, conciliarSobreSession);

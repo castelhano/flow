@@ -27,7 +27,8 @@ const APP_CONFIG = {
                 statusViagem:     { coluna: "U", regex: /^[1-9]$/,              descricao: "código de status da viagem (1 dígito numérico)" },
                 viagemEditada:      "W",
                 tabela:             "X",
-                empresa:          { coluna: "Y", regex: /.+/,                   descricao: "nome da empresa" }
+                // Y = "Observação" (nova coluna, não usada)
+                empresa:          { coluna: "Z", regex: /.+/,                   descricao: "nome da empresa" }
             },
             // De como vem no arquivo → valor canônico usado no app
             normalizacao: {
@@ -55,7 +56,8 @@ const APP_CONFIG = {
                 linha:      "H",
                 veiculo:    "I",
                 tipo:       "K",
-                tarifa:     "L"
+                // L = "Tipo" (nova coluna, fica tarifa/embarque, não usada) — tarifa deslocou de L para M
+                tarifa:     "M"
             },
             normalizacao: {
                 empresa: {
