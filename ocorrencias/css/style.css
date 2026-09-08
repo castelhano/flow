@@ -1,0 +1,136 @@
+/* ============================================================
+   ETAPA 1 — IMPORTAÇÃO
+============================================================ */
+.import-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr) 2fr;
+    gap: 12px;
+    align-items: end;
+}
+
+.drop-zone {
+    border: 1px dashed var(--border-hi);
+    border-radius: var(--radius-lg);
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    background: var(--muted-dim);
+    text-align: center;
+    height: 32px;
+    box-sizing: content-box;
+}
+
+.drop-zone:hover     { border-color: var(--accent); background: var(--accent-glow); }
+.drop-zone.loaded    { border-color: var(--success); border-style: solid; background: var(--success-dim); }
+
+.drop-zone svg { color: var(--text-3); width: 18px; height: 18px; transition: color .2s; }
+.drop-zone:hover svg { color: var(--accent); }
+.drop-zone.loaded svg { color: var(--success); }
+
+.drop-zone strong { font-size: 11px; font-weight: 500; color: var(--text); }
+.drop-zone p {
+    font-size: 10px;
+    color: var(--text-3);
+    font-family: var(--mono);
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.drop-zone.loaded p { color: var(--success); }
+
+.import-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
+}
+
+/* ============================================================
+   ETAPA 2 — TIPOS / RESUMO
+============================================================ */
+#section-tipos, #section-resultado { animation: fadeSlide .3s ease; }
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.stat-card {
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    position: relative;
+    overflow: hidden;
+}
+.stat-card::before {
+    content: '';
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--text-3);
+    border-radius: 3px 0 0 3px;
+}
+.stat-card.c-blue::before  { background: var(--accent); }
+.stat-card.c-green::before { background: var(--success); }
+
+.stat-label { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); margin-bottom: 6px; }
+.stat-value { font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--text); line-height: 1; }
+
+.tipos-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.tipos-links a {
+    font-size: .72rem;
+    font-family: var(--mono);
+    text-decoration: none;
+    margin-left: 14px;
+}
+.tipos-links a.link-marcar   { color: var(--accent); }
+.tipos-links a.link-desmarcar { color: var(--text-3); }
+
+.tipo-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 18px;
+}
+
+.tipo-chip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--bg-3);
+    border: 1px solid var(--border-hi);
+    border-radius: var(--radius);
+    padding: 7px 12px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: var(--mono);
+    transition: border-color .15s, background .15s;
+}
+.tipo-chip:has(input:checked) {
+    border-color: var(--accent);
+    background: var(--accent-glow);
+    color: var(--accent);
+}
+.tipo-chip input { display: none; }
+.tipo-chip .tipo-count { color: var(--text-3); }
+.tipo-chip:has(input:checked) .tipo-count { color: var(--accent); }
+
+.result-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 14px;
+}

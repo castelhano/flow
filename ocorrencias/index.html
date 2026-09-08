@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ocorrências</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../static/css/app.css">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+
+<header id="topbar">
+    <div class="topbar-left">
+        <a href="../dashboard.html" class="btn btn-ghost">
+            <i data-lucide="arrow-left"></i> Voltar
+        </a>
+        <div class="logo">
+            <div class="logo-icon"><i data-lucide="calendar-range"></i></div>
+            OCORRÊNCIAS <span class="logo-sub">RESUMO</span>
+        </div>
+    </div>
+    <div id="topbar-right">
+        <span id="status-badge">Aguardando arquivo...</span>
+    </div>
+</header>
+
+
+<div id="app">
+
+    <!-- ========================================================
+         ETAPA 1 — IMPORTAÇÃO
+    ======================================================== -->
+    <section id="section-import" class="card">
+        <div class="etapa-label">
+            <span class="etapa-num">ETAPA 01</span>
+            <span class="etapa-title">Período e arquivo</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <div class="import-grid">
+            <div class="filter-group">
+                <label>Início</label>
+                <input type="date" id="input-inicio">
+            </div>
+            <div class="filter-group">
+                <label>Fim</label>
+                <input type="date" id="input-fim">
+            </div>
+            <div class="drop-zone" id="drop-accdb">
+                <input type="file" id="input-accdb" class="hidden" accept=".accdb,.mdb">
+                <i data-lucide="upload-cloud"></i>
+                <strong>Base do Access</strong>
+                <p>.accdb — clique para selecionar</p>
+            </div>
+        </div>
+
+        <div class="import-actions">
+            <button id="btn-carregar" class="btn btn-primary">
+                <i data-lucide="play"></i> Carregar e analisar
+            </button>
+        </div>
+    </section>
+
+
+    <!-- ========================================================
+         ETAPA 2 — TIPOS DE OCORRÊNCIA
+    ======================================================== -->
+    <section id="section-tipos" class="card hidden">
+        <div class="etapa-label">
+            <span class="etapa-num">ETAPA 02</span>
+            <span class="etapa-title">Tipos de ocorrência</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card c-blue">
+                <div class="stat-label">Dias no período</div>
+                <div class="stat-value" id="stat-dias">—</div>
+            </div>
+            <div class="stat-card c-green">
+                <div class="stat-label">Ocorrências no período</div>
+                <div class="stat-value" id="stat-total">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Tipos encontrados</div>
+                <div class="stat-value" id="stat-tipos">—</div>
+            </div>
+        </div>
+
+        <div class="tipos-toolbar">
+            <span class="etapa-title" style="text-transform:none;">Selecione os tipos a incluir no resumo</span>
+            <div class="tipos-links">
+                <a href="#" class="link-marcar" id="link-marcar-todos">Marcar todos</a>
+                <a href="#" class="link-desmarcar" id="link-desmarcar-todos">Desmarcar todos</a>
+            </div>
+        </div>
+
+        <div class="tipo-grid" id="tipo-grid"></div>
+
+        <div class="result-actions">
+            <button id="btn-gerar" class="btn btn-success">
+                <i data-lucide="table"></i> Gerar resumo
+            </button>
+        </div>
+    </section>
+
+
+    <!-- ========================================================
+         ETAPA 3 — RESULTADO
+    ======================================================== -->
+    <section id="section-resultado" class="card hidden">
+        <div class="etapa-label">
+            <span class="etapa-num">ETAPA 03</span>
+            <span class="etapa-title">Resumo diário</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr id="result-head"></tr>
+                </thead>
+                <tbody id="result-body"></tbody>
+            </table>
+        </div>
+
+        <div class="result-actions">
+            <button id="btn-csv" class="btn btn-ghost">
+                <i data-lucide="download"></i> Baixar CSV
+            </button>
+        </div>
+    </section>
+
+</div><!-- #app -->
+
+
+<!-- ============================================================
+     LOADER
+============================================================ -->
+<div id="loader" class="hidden">
+    <div class="spinner"></div>
+    <p id="loader-text">Lendo base de dados...</p>
+</div>
+
+
+<!-- ============================================================
+     SCRIPTS
+============================================================ -->
+<script src="vendor/mdb-reader.min.js"></script>
+<script src="js/main.js"></script>
+
+<script>
+lucide.createIcons();
+</script>
+
+</body>
+</html>
