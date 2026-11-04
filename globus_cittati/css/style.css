@@ -1,0 +1,105 @@
+/* ============================================================
+   ETAPA 1 — ARQUIVO
+============================================================ */
+.drop-zone {
+    border: 1px dashed var(--border-hi);
+    border-radius: var(--radius-lg);
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    background: var(--muted-dim);
+    text-align: center;
+}
+
+.drop-zone:hover,
+.drop-zone.dragover { border-color: var(--accent); background: var(--accent-glow); }
+.drop-zone.loaded   { border-color: var(--success); border-style: solid; background: var(--success-dim); }
+
+.drop-zone svg { color: var(--text-3); width: 18px; height: 18px; transition: color .2s; }
+.drop-zone:hover svg { color: var(--accent); }
+.drop-zone.loaded svg { color: var(--success); }
+
+.drop-zone strong { font-size: 11px; font-weight: 500; color: var(--text); }
+.drop-zone p {
+    font-size: 10px;
+    color: var(--text-3);
+    font-family: var(--mono);
+}
+.drop-zone.loaded p { color: var(--success); }
+
+/* ============================================================
+   ETAPAS 2 A 4
+============================================================ */
+#section-analise, #section-programacao, #section-duvidas, #section-exportar { animation: fadeSlide .3s ease; }
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.stat-card {
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    position: relative;
+    overflow: hidden;
+}
+.stat-card::before {
+    content: '';
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--text-3);
+    border-radius: 3px 0 0 3px;
+}
+.stat-card.c-blue::before  { background: var(--accent); }
+.stat-card.c-green::before { background: var(--success); }
+.stat-card.c-amber::before { background: var(--warning); }
+.stat-card.c-red::before   { background: var(--danger); }
+
+.stat-label { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); margin-bottom: 6px; }
+.stat-value { font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--text); line-height: 1; }
+
+.bloco-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--text-2);
+    margin: 18px 0 8px;
+}
+
+.bloco-texto { font-size: 12px; color: var(--text-2); line-height: 1.6; margin-bottom: 12px; }
+.bloco-vazio { font-size: 12px; color: var(--text-3); }
+
+#section-analise .table-wrap { max-height: 320px; overflow-y: auto; }
+
+.duvida-eventos { white-space: pre-line; }
+
+.duvida-select,
+.prog-input {
+    background: var(--bg-3);
+    border: 1px solid var(--border-hi);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 5px 8px;
+}
+
+.result-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.btn:disabled { opacity: .4; cursor: not-allowed; }

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Globus → Cittati</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../static/css/app.css">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+
+<header id="topbar">
+    <div class="topbar-left">
+        <a href="../dashboard.html" class="btn btn-ghost">
+            <i data-lucide="arrow-left"></i> Voltar
+        </a>
+        <div class="logo">
+            <div class="logo-icon"><i data-lucide="arrow-left-right"></i></div>
+            GLOBUS → CITTATI <span class="logo-sub">LIMPEZA</span>
+        </div>
+    </div>
+    <div id="topbar-right">
+        <span id="status-badge">Aguardando arquivo...</span>
+    </div>
+</header>
+
+
+<div id="app">
+
+    <!-- ========================================================
+         ETAPA 1 — ARQUIVO
+    ======================================================== -->
+    <section id="section-import" class="card">
+        <div class="etapa-label">
+            <span class="etapa-num">ETAPA 01</span>
+            <span class="etapa-title">Arquivo do Globus</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <div class="drop-zone" id="drop-txt">
+            <input type="file" id="input-txt" class="hidden" accept=".txt">
+            <i data-lucide="upload-cloud"></i>
+            <strong>Escala exportada do Globus</strong>
+            <p id="drop-txt-info">.txt — clique ou arraste o arquivo</p>
+        </div>
+    </section>
+
+
+    <!-- ========================================================
+         ETAPA 2 — ANÁLISE
+    ======================================================== -->
+    <section id="section-analise" class="card hidden">
+        <div class="etapa-label">
+            <span class="etapa-num">ETAPA 02</span>
+            <span class="etapa-title">Análise</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card c-blue">
+                <div class="stat-label">Linhas lidas</div>
+                <div class="stat-value" id="stat-lidas">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Tabelas</div>
+                <div class="stat-value" id="stat-tabelas">—</div>
+            </div>
+            <div class="stat-card c-red">
+                <div class="stat-label">Eventos removidos</div>
+                <div class="stat-value" id="stat-removidos">—</div>
+            </div>
+            <div class="stat-card c-green">
+                <div class="stat-label">Dias corrigidos</div>
+                <div class="stat-value" id="stat-dias">—</div>
+            </div>
+            <div class="stat-card c-amber">
+                <div class="stat-label">Críticas</div>
+                <div class="stat-value" id="stat-criticas">—</div>
+            </div>
+        </div>
+
+        <h3 class="bloco-title">Críticas</h3>
+        <p class="bloco-vazio hidden" id="criticas-vazio">Nenhuma crítica neste arquivo.</p>
+        <div class="table-wrap" id="criticas-wrap">
+            <table>
+                <thead>
+                    <tr><th>Crítica</th><th>Linha</th><th>Tabela</th><th>Detalhe</th></tr>
+                </thead>
+                <tbody id="criticas-body"></tbody>
+            </table>
+        </div>
+
+        <h3 class="bloco-title">Alterações no arquivo</h3>
+        <p class="bloco-vazio hidden" id="alteracoes-vazio">Nenhum evento removido ou dia alterado.</p>
+        <div class="table-wrap" id="alteracoes-wrap">
+            <table>
+                <thead>
+                    <tr><th>Alteração</th><th>Linha</th><th>Tabela</th><th>Seq</th><th>Horário</th><th>Dia antes</th><th>Dia depois</th></tr>
+                </thead>
+                <tbody id="alteracoes-body"></tbody>
+            </table>
+        </div>
+    </section>
+
+
+    <!-- ========================================================
+         CONFIRMAÇÃO — CÓDIGO DE PROGRAMAÇÃO (só aparece se faltar)
+    ======================================================== -->
+    <section id="section-programacao" class="card hidden">
+        <div class="etapa-label">
+            <span class="etapa-num" id="programacao-num">ETAPA 03</span>
+            <span class="etapa-title">Código de programação ausente</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <p class="bloco-texto">
+            Estas linhas vieram sem código de programação. Confira a sugestão ou informe o código; a confirmação vale para todos os eventos da linha.
+        </p>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>Linha</th><th>Eventos</th><th>Sugestão</th><th>Código</th><th>Confirmar</th></tr>
+                </thead>
+                <tbody id="programacao-body"></tbody>
+            </table>
+        </div>
+    </section>
+
+
+    <!-- ========================================================
+         CONFIRMAÇÃO — DIAS (só aparece quando há dúvida)
+    ======================================================== -->
+    <section id="section-duvidas" class="card hidden">
+        <div class="etapa-label">
+            <span class="etapa-num" id="duvidas-num">ETAPA 03</span>
+            <span class="etapa-title">Confirmação manual dos dias</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <p class="bloco-texto">
+            A rotina não conseguiu decidir sozinha nestas tabelas. Confira os dias de cada evento e escolha o que fazer para liberar a exportação.
+        </p>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>Linha</th><th>Tabela</th><th>Motivo</th><th>Eventos (dia no arquivo → dia pela regra)</th><th>Decisão</th></tr>
+                </thead>
+                <tbody id="duvidas-body"></tbody>
+            </table>
+        </div>
+    </section>
+
+
+    <!-- ========================================================
+         ETAPA FINAL — EXPORTAÇÃO
+    ======================================================== -->
+    <section id="section-exportar" class="card hidden">
+        <div class="etapa-label">
+            <span class="etapa-num" id="exportar-num">ETAPA 03</span>
+            <span class="etapa-title">Exportação</span>
+            <div class="etapa-sep"></div>
+        </div>
+
+        <p class="bloco-texto" id="exportar-resumo"></p>
+
+        <div class="result-actions">
+            <button id="btn-log" class="btn btn-ghost">
+                <i data-lucide="file-text"></i> Baixar log
+            </button>
+            <button id="btn-prog" class="btn btn-success">
+                <i data-lucide="download"></i> Baixar prog
+            </button>
+            <button id="btn-escala" class="btn btn-success">
+                <i data-lucide="download"></i> Baixar escala
+            </button>
+        </div>
+    </section>
+
+</div><!-- #app -->
+
+
+<!-- ============================================================
+     SCRIPTS
+============================================================ -->
+<script src="js/engine.js"></script>
+<script src="js/main.js"></script>
+
+<script>
+if (window.lucide) lucide.createIcons();
+</script>
+
+</body>
+</html>
