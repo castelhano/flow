@@ -12,13 +12,20 @@ const GlobusEngine = (() => {
     const TOTAL_CAMPOS = 28;
 
     const COL = {
-        LINHA: 0, PROGRAMACAO: 2, TABELA: 4, SAIDA: 5, CHEGADA: 6, SEQ: 7, CODIGO: 8, FLAG: 9,
+        LINHA: 0, TIPO_DIA: 1, PROGRAMACAO: 2, TABELA: 4, SAIDA: 5, CHEGADA: 6, SEQ: 7, CODIGO: 8, FLAG: 9, SENTIDO: 10,
         H_INICIO: 11, H_FIM: 12, DIA_INICIO: 13, DIA_FIM: 14,
         QTD_VIAGENS: 19, QTD_VEICULOS: 20, DATA_ESCALA: 21, PREFIXO: 22, MATRICULA: 23, NOME: 25,
     };
 
     // Vazio = viagem normal: o Globus não preenche o código nesses eventos
     const CODIGOS_PERMITIDOS = new Set(["", "2", "3", "5", "8", "10"]);
+
+    // Ordem de exibição das críticas; as resumidas aparecem em uma linha só na tela
+    const ORDEM_CRITICAS = [
+        "Tabela sem carro", "Tabela sem condutor", "Carro sobreposto", "Condutor sobreposto",
+        "Horário incoerente", "Viagens não conferem", "Improdutivo sem código",
+    ];
+    const CRITICAS_RESUMIDAS = new Set(["Improdutivo sem código"]);
 
     // Recuo de horário maior que isso é virada de dia; menor é horário incoerente
     const MEIO_DIA = 720;
@@ -42,6 +49,7 @@ const GlobusEngine = (() => {
 
     function dadosEvento(campos) {
         return {
+            data: campos[COL.DATA_ESCALA],
             linha: campos[COL.LINHA],
             tabela: campos[COL.TABELA],
             seq: campos[COL.SEQ],
@@ -81,15 +89,18 @@ const GlobusEngine = (() => {
         return eventos;
     }
 
+    // Um arquivo pode trazer vários dias: a mesma tabela existe em cada data
     function agruparTabelas(eventos) {
         const grupos = new Map();
         for (const evento of eventos) {
-            const chave = `${evento.campos[COL.LINHA]}|${evento.campos[COL.TABELA]}`;
+            const { campos } = evento;
+            const chave = [campos[COL.DATA_ESCALA], campos[COL.TIPO_DIA], campos[COL.LINHA], campos[COL.TABELA]].join("|");
             if (!grupos.has(chave)) {
                 grupos.set(chave, {
                     chave,
-                    linha: evento.campos[COL.LINHA],
-                    tabela: evento.campos[COL.TABELA],
+                    data: campos[COL.DATA_ESCALA],
+                    linha: campos[COL.LINHA],
+                    tabela: campos[COL.TABELA],
                     eventos: [],
                 });
             }
@@ -109,6 +120,21 @@ const GlobusEngine = (() => {
     // Removidos sem duração ficam de fora: são marcos no meio da viagem,
     // com horário anterior ao fim dela (309: viagem até 05:44, marco 05:09).
     // ----------------------------------------------------------
+    function marcarRemovidos(grupo) {
+        grupo.eventos.forEach((evento, i) => {
+            const { campos } = evento;
+            const codigo = campos[COL.CODIGO].trim();
+            const ultimo = i === grupo.eventos.length - 1;
+
+            if (!CODIGOS_PERMITIDOS.has(codigo)) {
+                evento.motivoRemocao = `código ${codigo}`;
+            } else if (!codigo && campos[COL.FLAG] === "0" && campos[COL.SENTIDO] === "C" && !ultimo) {
+                // Só informativo. O do fim da tabela fica: é um fechamento sem código (crítica)
+                evento.motivoRemocao = "informativo, sentido C";
+            }
+        });
+    }
+
     function virouMeiaNoite(de, para) {
         return de - para > MEIO_DIA;
     }
@@ -140,10 +166,10 @@ const GlobusEngine = (() => {
     // duvida: a regra não explica o arquivo, quem decide é o usuário
     function classificarDias(grupo) {
         const diaInicial = Number(grupo.eventos[0].campos[COL.DIA_INICIO]);
-        const esperados = calcularDias(grupo.eventos.filter(e => !e.removido || !semDuracao(e)));
+        const esperados = calcularDias(grupo.eventos.filter(e => !e.motivoRemocao || !semDuracao(e)));
         const divergencias = [];
 
-        grupo.eventos = grupo.eventos.filter(e => !e.removido);
+        grupo.eventos = grupo.eventos.filter(e => !e.motivoRemocao);
         for (const evento of grupo.eventos) {
             const esperado = esperados.get(evento);
             const atual = {
@@ -170,11 +196,11 @@ const GlobusEngine = (() => {
     // Código de programação ausente: agrupa por linha e sugere o
     // código da própria linha ou da linha sem a letra final (308B → 308)
     // ----------------------------------------------------------
-    function codigoMaisFrequente(eventos, linha) {
+    function codigoMaisFrequente(eventos, data, linha) {
         const contagem = new Map();
         for (const { campos } of eventos) {
             const codigo = campos[COL.PROGRAMACAO].trim();
-            if (campos[COL.LINHA] === linha && codigo) {
+            if (campos[COL.DATA_ESCALA] === data && campos[COL.LINHA] === linha && codigo) {
                 contagem.set(codigo, (contagem.get(codigo) || 0) + 1);
             }
         }
@@ -182,32 +208,39 @@ const GlobusEngine = (() => {
         return maisFrequente ? maisFrequente[0] : "";
     }
 
+    function chaveDataLinha(campos) {
+        return `${campos[COL.DATA_ESCALA]}|${campos[COL.LINHA]}`;
+    }
+
     function listarSemProgramacao(eventos) {
         const porLinha = new Map();
         for (const { campos } of eventos) {
             if (campos[COL.PROGRAMACAO].trim()) continue;
-            const linha = campos[COL.LINHA];
-            porLinha.set(linha, (porLinha.get(linha) || 0) + 1);
+            const chave = chaveDataLinha(campos);
+            porLinha.set(chave, (porLinha.get(chave) || 0) + 1);
         }
 
-        return [...porLinha].map(([linha, totalEventos]) => ({
-            linha,
-            totalEventos,
-            sugestao: codigoMaisFrequente(eventos, linha)
-                || codigoMaisFrequente(eventos, linha.replace(/[A-Za-z]+$/, "")),
-        }));
+        return [...porLinha].map(([chave, totalEventos]) => {
+            const [data, linha] = chave.split("|");
+            return {
+                chave,
+                data,
+                linha,
+                totalEventos,
+                sugestao: codigoMaisFrequente(eventos, data, linha)
+                    || codigoMaisFrequente(eventos, data, linha.replace(/[A-Za-z]+$/, "")),
+            };
+        });
     }
 
     function analisar(texto) {
         const eventos = parsear(texto);
-        for (const evento of eventos) {
-            evento.removido = !CODIGOS_PERMITIDOS.has(evento.campos[COL.CODIGO].trim());
-        }
-
-        const removidos = eventos.filter(e => e.removido);
-        const mantidos = eventos.filter(e => !e.removido);
-
         const grupos = agruparTabelas(eventos);
+        grupos.forEach(marcarRemovidos);
+
+        const removidos = eventos.filter(e => e.motivoRemocao);
+        const mantidos = eventos.filter(e => !e.motivoRemocao);
+
         grupos.forEach(classificarDias);
 
         return {
@@ -244,12 +277,15 @@ const GlobusEngine = (() => {
     function preencherProgramacao(eventos, programacoes) {
         const preenchidas = new Map();
         for (const { campos } of eventos) {
-            const linha = campos[COL.LINHA];
-            if (campos[COL.PROGRAMACAO].trim() || !programacoes[linha]) continue;
-            campos[COL.PROGRAMACAO] = programacoes[linha];
-            preenchidas.set(linha, (preenchidas.get(linha) || 0) + 1);
+            const chave = chaveDataLinha(campos);
+            if (campos[COL.PROGRAMACAO].trim() || !programacoes[chave]) continue;
+            campos[COL.PROGRAMACAO] = programacoes[chave];
+            preenchidas.set(chave, (preenchidas.get(chave) || 0) + 1);
         }
-        return [...preenchidas].map(([linha, total]) => ({ linha, total, codigo: programacoes[linha] }));
+        return [...preenchidas].map(([chave, total]) => {
+            const [data, linha] = chave.split("|");
+            return { data, linha, total, codigo: programacoes[chave] };
+        });
     }
 
     function renumerar(grupo) {
@@ -268,13 +304,13 @@ const GlobusEngine = (() => {
     function preencherQuantidades(eventos) {
         const carrosPorLinha = new Map();
         for (const { campos } of eventos) {
-            const linha = campos[COL.LINHA];
-            if (!carrosPorLinha.has(linha)) carrosPorLinha.set(linha, new Set());
-            if (campos[COL.PREFIXO].trim()) carrosPorLinha.get(linha).add(campos[COL.PREFIXO]);
+            const chave = chaveDataLinha(campos);
+            if (!carrosPorLinha.has(chave)) carrosPorLinha.set(chave, new Set());
+            if (campos[COL.PREFIXO].trim()) carrosPorLinha.get(chave).add(campos[COL.PREFIXO]);
         }
         for (const { campos } of eventos) {
             campos[COL.QTD_VIAGENS] = campos[COL.QTD_VIAGENS].replace(".", ",");
-            campos[COL.QTD_VEICULOS] = String(carrosPorLinha.get(campos[COL.LINHA]).size);
+            campos[COL.QTD_VEICULOS] = String(carrosPorLinha.get(chaveDataLinha(campos)).size);
         }
     }
 
@@ -294,7 +330,7 @@ const GlobusEngine = (() => {
         const criticas = [];
 
         for (const grupo of grupos) {
-            const { linha, tabela, eventos } = grupo;
+            const { data, linha, tabela, eventos } = grupo;
             const faixa = lista => {
                 const inicio = formatarHora(lista[0].campos[COL.H_INICIO]);
                 const fim = formatarHora(lista[lista.length - 1].campos[COL.H_FIM]);
@@ -303,12 +339,12 @@ const GlobusEngine = (() => {
 
             const semCarro = eventos.filter(e => !e.campos[COL.PREFIXO].trim());
             if (semCarro.length) {
-                criticas.push({ tipo: "Tabela sem carro", linha, tabela, detalhe: faixa(semCarro) });
+                criticas.push({ tipo: "Tabela sem carro", data, linha, tabela, detalhe: faixa(semCarro) });
             }
 
             const semCondutor = eventos.filter(e => !e.campos[COL.MATRICULA].trim());
             if (semCondutor.length) {
-                criticas.push({ tipo: "Tabela sem condutor", linha, tabela, detalhe: faixa(semCondutor) });
+                criticas.push({ tipo: "Tabela sem condutor", data, linha, tabela, detalhe: faixa(semCondutor) });
             }
 
             const incoerentes = eventos.filter((e, i) => horarioIncoerente(e, eventos[i - 1]));
@@ -317,7 +353,7 @@ const GlobusEngine = (() => {
                     const { seq, inicio, fim } = dadosEvento(e.campos);
                     return `Seq ${seq} (${inicio}–${fim})`;
                 }).join(", ");
-                criticas.push({ tipo: "Horário incoerente", linha, tabela, detalhe: `${seqs} (ajustar no ERP)` });
+                criticas.push({ tipo: "Horário incoerente", data, linha, tabela, detalhe: `${seqs} (ajustar no ERP)` });
             }
 
             const semCodigo = eventos.filter(e => e.campos[COL.FLAG] === "0" && !e.campos[COL.CODIGO].trim());
@@ -325,8 +361,9 @@ const GlobusEngine = (() => {
                 const seqs = semCodigo.map(e => e.campos[COL.SEQ]).join(", ");
                 criticas.push({
                     tipo: "Improdutivo sem código",
-                    linha, tabela,
+                    data, linha, tabela,
                     detalhe: `Seq ${seqs} (ajustar no ERP)`,
+                    eventos: semCodigo.length,
                 });
             }
         }
@@ -338,16 +375,19 @@ const GlobusEngine = (() => {
 
         for (const { campos } of eventos) {
             const quantidade = campos[COL.QTD_VIAGENS];
-            if (!porQuantidade.has(quantidade)) {
-                porQuantidade.set(quantidade, { linhas: new Set(), produtivos: 0 });
+            const data = campos[COL.DATA_ESCALA];
+            const chave = `${data}|${quantidade}`;
+            if (!porQuantidade.has(chave)) {
+                porQuantidade.set(chave, { data, quantidade, linhas: new Set(), produtivos: 0 });
             }
-            const item = porQuantidade.get(quantidade);
+            const item = porQuantidade.get(chave);
             item.linhas.add(campos[COL.LINHA]);
             if (campos[COL.FLAG] === "1") item.produtivos++;
         }
 
         const criticas = [];
-        for (const [quantidade, item] of porQuantidade) {
+        for (const item of porQuantidade.values()) {
+            const { data, quantidade } = item;
             // Cada viagem da quantidade são 2 eventos (ida e volta). Linhas diferentes podem
             // ter a mesma quantidade, por isso o múltiplo limitado ao número de linhas.
             const multiplo = item.produtivos / (2 * Number(quantidade.replace(",", ".")));
@@ -355,6 +395,7 @@ const GlobusEngine = (() => {
 
             criticas.push({
                 tipo: "Viagens não conferem",
+                data,
                 linha: [...item.linhas].join(", "),
                 tabela: "—",
                 detalhe: `Informado ${quantidade}, encontrado ${item.produtivos / 2}`,
@@ -376,15 +417,17 @@ const GlobusEngine = (() => {
             for (const { campos } of eventos) {
                 const recurso = campos[col].trim();
                 if (!recurso) continue;
-                if (!porRecurso.has(recurso)) porRecurso.set(recurso, []);
-                porRecurso.get(recurso).push({
+                const chave = `${campos[COL.DATA_ESCALA]}|${recurso}`;
+                if (!porRecurso.has(chave)) porRecurso.set(chave, []);
+                porRecurso.get(chave).push({
                     campos,
                     inicio: (Number(campos[COL.DIA_INICIO]) - 1) * 1440 + minutos(campos[COL.H_INICIO]),
                     fim: (Number(campos[COL.DIA_FIM]) - 1) * 1440 + minutos(campos[COL.H_FIM]),
                 });
             }
 
-            for (const [recurso, lista] of porRecurso) {
+            for (const [chave, lista] of porRecurso) {
+                const [data, recurso] = chave.split("|");
                 lista.sort((a, b) => a.inicio - b.inicio || a.fim - b.fim);
                 lista.slice(1).forEach((atual, i) => {
                     const anterior = lista[i];
@@ -394,6 +437,7 @@ const GlobusEngine = (() => {
                     const b = dadosEvento(atual.campos);
                     criticas.push({
                         tipo,
+                        data,
                         linha: a.linha === b.linha ? a.linha : `${a.linha}, ${b.linha}`,
                         tabela: a.tabela === b.tabela ? a.tabela : `${a.tabela}, ${b.tabela}`,
                         detalhe: `${recurso}: ${a.inicio}–${a.fim} x ${b.inicio}–${b.fim}`,
@@ -445,11 +489,31 @@ const GlobusEngine = (() => {
                 ...criticasPorTabela(grupos),
                 ...criticasDeViagens(eventos),
                 ...criticasDeSobreposicao(eventos),
-            ],
+            ].sort((a, b) => ORDEM_CRITICAS.indexOf(a.tipo) - ORDEM_CRITICAS.indexOf(b.tipo)),
         };
     }
 
-    return { analisar, resolver, dadosEvento, COL };
+    // Versão da tela: o detalhe completo das resumidas fica no log
+    function resumirCriticas(criticas) {
+        const resumo = criticas.filter(c => !CRITICAS_RESUMIDAS.has(c.tipo));
+
+        for (const tipo of CRITICAS_RESUMIDAS) {
+            const itens = criticas.filter(c => c.tipo === tipo);
+            if (!itens.length) continue;
+
+            const eventos = itens.reduce((total, c) => total + c.eventos, 0);
+            resumo.push({
+                tipo,
+                data: "—",
+                linha: "—",
+                tabela: "—",
+                detalhe: `${itens.length} tabela(s), ${eventos} evento(s). Detalhe no log`,
+            });
+        }
+        return resumo;
+    }
+
+    return { analisar, resolver, resumirCriticas, dadosEvento, COL };
 })();
 
 if (typeof module !== "undefined") module.exports = GlobusEngine;

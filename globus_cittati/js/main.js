@@ -4,8 +4,8 @@
 const state = {
     nomeArquivo: "",
     analise: null,
-    decisoes: {},    // { "linha|tabela": "manter" | "corrigir" }
-    programacoes: {}, // { linha: { codigo, confirmado } }
+    decisoes: {},    // { chave da tabela: "manter" | "corrigir" }
+    programacoes: {}, // { "data|linha": { codigo, confirmado } }
     resultado: null,
 };
 
@@ -33,6 +33,7 @@ const el = {
     criticasBody: $("criticas-body"),
     criticasWrap: $("criticas-wrap"),
     criticasVazio: $("criticas-vazio"),
+    remocoesResumo: $("remocoes-resumo"),
     alteracoesBody: $("alteracoes-body"),
     alteracoesWrap: $("alteracoes-wrap"),
     alteracoesVazio: $("alteracoes-vazio"),
@@ -95,7 +96,7 @@ async function carregarArquivo(arquivo) {
         state.nomeArquivo = arquivo.name;
         state.decisoes = {};
         state.programacoes = Object.fromEntries(state.analise.semProgramacao.map(
-            item => [item.linha, { codigo: item.sugestao, confirmado: false }]
+            item => [item.chave, { codigo: item.sugestao, confirmado: false }]
         ));
     } catch (err) {
         state.analise = null;
@@ -139,17 +140,24 @@ function mostrarLista(wrap, vazio, temItens) {
     vazio.classList.toggle("hidden", temItens);
 }
 
+function resumirRemocoes() {
+    const porMotivo = new Map();
+    for (const { motivoRemocao } of state.analise.removidos) {
+        porMotivo.set(motivoRemocao, (porMotivo.get(motivoRemocao) || 0) + 1);
+    }
+    return [...porMotivo].map(([motivo, total]) => `${total} (${motivo})`).join(", ");
+}
+
 function listarAlteracoes() {
-    const remocoes = state.analise.removidos.map(({ campos }) => {
+    const remocoes = state.analise.removidos.map(({ campos, motivoRemocao }) => {
         const e = GlobusEngine.dadosEvento(campos);
-        const codigo = campos[GlobusEngine.COL.CODIGO];
-        return [`${REMOCAO} (código ${codigo})`, e.linha, e.tabela, e.seq, `${e.inicio}–${e.fim}`, "—", "—"];
+        return [`${REMOCAO} (${motivoRemocao})`, e.data, e.linha, e.tabela, e.seq, `${e.inicio}–${e.fim}`, "—", "—"];
     });
     const programacoes = state.resultado.programacoesPreenchidas.map(p => (
-        [`${PROGRAMACAO} (${p.total} eventos)`, p.linha, "—", "—", "—", "—", p.codigo]
+        [`${PROGRAMACAO} (${p.total} eventos)`, p.data, p.linha, "—", "—", "—", "—", p.codigo]
     ));
     const dias = state.resultado.alteracoesDia.map(a => (
-        [DIA, a.linha, a.tabela, a.seq, `${a.inicio}–${a.fim}`, a.de, a.para]
+        [DIA, a.data, a.linha, a.tabela, a.seq, `${a.inicio}–${a.fim}`, a.de, a.para]
     ));
     return [...remocoes, ...programacoes, ...dias];
 }
@@ -171,10 +179,10 @@ function renderEtapas() {
 
 function renderProgramacao() {
     el.programacaoBody.replaceChildren(...state.analise.semProgramacao.map(item => {
-        const programacao = state.programacoes[item.linha];
+        const programacao = state.programacoes[item.chave];
         const tr = document.createElement("tr");
 
-        [item.linha, item.totalEventos, item.sugestao || "Sem sugestão"].forEach(valor => {
+        [item.data, item.linha, item.totalEventos, item.sugestao || "Sem sugestão"].forEach(valor => {
             const td = document.createElement("td");
             td.textContent = valor;
             tr.appendChild(td);
@@ -215,7 +223,7 @@ function programacoesConfirmadas() {
     return Object.fromEntries(
         Object.entries(state.programacoes)
             .filter(([, p]) => p.confirmado)
-            .map(([linha, p]) => [linha, p.codigo])
+            .map(([chave, p]) => [chave, p.codigo])
     );
 }
 
@@ -227,7 +235,7 @@ function renderDuvidas() {
             return `Seq ${e.seq}, ${e.inicio}–${e.fim}: dia ${atual.inicio} → dia ${esperado.inicio}`;
         });
 
-        [grupo.linha, grupo.tabela, grupo.motivoDuvida, eventos.join("\n")].forEach(valor => {
+        [grupo.data, grupo.linha, grupo.tabela, grupo.motivoDuvida, eventos.join("\n")].forEach(valor => {
             const td = document.createElement("td");
             td.textContent = valor;
             tr.appendChild(td);
@@ -262,8 +270,13 @@ function atualizarResultado() {
     el.statDias.textContent = alteracoesDia.length;
     el.statCriticas.textContent = criticas.length;
 
-    preencherTabela(el.criticasBody, criticas.map(c => [c.tipo, c.linha, c.tabela, c.detalhe]));
+    const criticasTela = GlobusEngine.resumirCriticas(criticas);
+    preencherTabela(el.criticasBody, criticasTela.map(c => [c.tipo, c.data, c.linha, c.tabela, c.detalhe]));
     mostrarLista(el.criticasWrap, el.criticasVazio, criticas.length > 0);
+
+    const remocoes = resumirRemocoes();
+    el.remocoesResumo.textContent = `Eventos removidos: ${remocoes}.`;
+    el.remocoesResumo.classList.toggle("hidden", !remocoes);
 
     const alteracoes = listarAlteracoes();
     preencherTabela(el.alteracoesBody, alteracoes);
@@ -289,11 +302,11 @@ function exportarArquivo(tipo) {
 
 function exportarLog() {
     const csv = valor => `"${String(valor).replace(/"/g, '""')}"`;
-    const cabecalho = ["Alteração", "Linha", "Tabela", "Seq", "Horário", "Dia antes", "Dia depois"];
+    const cabecalho = ["Alteração", "Data", "Linha", "Tabela", "Seq", "Horário", "Dia antes", "Dia depois"];
     const alteracoes = [cabecalho, ...listarAlteracoes()];
     const criticas = [
-        ["Crítica", "Linha", "Tabela", "Detalhe"],
-        ...state.resultado.criticas.map(c => [c.tipo, c.linha, c.tabela, c.detalhe]),
+        ["Crítica", "Data", "Linha", "Tabela", "Detalhe"],
+        ...state.resultado.criticas.map(c => [c.tipo, c.data, c.linha, c.tabela, c.detalhe]),
     ];
     const linhas = [...alteracoes, [], ...criticas].map(l => l.map(csv).join(";"));
 
