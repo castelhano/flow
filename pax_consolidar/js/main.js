@@ -18,11 +18,18 @@
 // Estado global da aplicação
 // session: objeto Session gerado pelo Engine (única fonte de verdade)
 // rawGps / rawPax: linhas brutas dos CSVs (usados apenas para processar)
+// paxFiles: referências aos CSVs de bilhetagem (não ocupam memória). Só são
+//   lidos no "Processar", já recortados no dia do GPS (PaxCorte). Podem ser
+//   vários períodos: o vizinho completa a virada do dia.
+// paxDia / paxCorte: dia do recorte em rawPax e resumo do recorte
 // ----------------------------------------------------------
 const AppState = {
-    rawGps:  null,
-    rawPax:  null,
-    session: null,
+    rawGps:   null,
+    rawPax:   null,
+    paxFiles: [],
+    paxDia:   null,
+    paxCorte: null,
+    session:  null,
     // Flags de leitura em andamento — evita liberar "Processar"
     // enquanto um arquivo grande (ex: bilhetagem) ainda está sendo parseado.
     loading: { gps: false, pax: false }
@@ -95,13 +102,26 @@ async function handleFileSelect(tipo, file) {
             _validarCSV(rawData, "gps");
             AppState.rawGps = rawData;
         } else {
-            const rawData = await Parser.readCSV(file);
-            _validarCSV(rawData, "pax");
-            AppState.rawPax = rawData;
+            // Bilhetagem pode ter vários arquivos e centenas de MB: aqui só valida
+            // o layout. A leitura (recortada no dia do GPS) acontece no Processar.
+            // Cada seleção soma à lista (mesmo arquivo não entra duas vezes).
+            const novos = Array.isArray(file) ? file : [file];
+            for (const f of novos) {
+                try { await PaxCorte.validar(f); }
+                catch (e) { throw new Error(`${f.name}: ${e.message}`); }
+            }
+            const chave = f => `${f.name}|${f.size}|${f.lastModified}`;
+            const atuais = new Set(AppState.paxFiles.map(chave));
+            AppState.paxFiles = [...AppState.paxFiles, ...novos.filter(f => !atuais.has(chave(f)))];
+            AppState.rawPax   = null;
+            AppState.paxDia   = null;
+            AppState.paxCorte = null;
         }
 
+        if (tipo === "gps") _avisarGpsSemRealizadas();
+
         // Atualiza badge e exibe botão de processar quando ambos estiverem prontos
-        if (AppState.rawGps && AppState.rawPax) {
+        if (AppState.rawGps && AppState.paxFiles.length) {
             UIController.setStatusBadge("Arquivos prontos!", "success");
         } else {
             UIController.setStatusBadge(
@@ -122,11 +142,102 @@ async function handleFileSelect(tipo, file) {
 
 
 // ----------------------------------------------------------
+// Remove os arquivos de bilhetagem carregados
+// ----------------------------------------------------------
+function limparBilhetagem() {
+    AppState.paxFiles = [];
+    AppState.rawPax   = null;
+    AppState.paxDia   = null;
+    AppState.paxCorte = null;
+    UIController.setStatusBadge("Bilhetagem removida.", "muted");
+}
+
+
+// ----------------------------------------------------------
+// Avisa quando o GPS não tem nenhuma viagem que concilia
+// (ex: export de data futura — tudo "Não iniciado")
+// ----------------------------------------------------------
+function _avisarGpsSemRealizadas() {
+    const norm   = new DataNormalizer(APP_CONFIG.fontes.gps);
+    const status = Object.values(APP_CONFIG.engine.status).filter(s => s.concilia).map(s => s.value);
+    const linhas = AppState.rawGps || [];
+    const realizadas = linhas.filter(r => status.includes(String(norm.normalize(r).statusViagem))).length;
+    if (linhas.length > 0 && realizadas === 0) {
+        const data = norm.normalize(linhas[0]).data;
+        alert(
+            `GPS sem viagens realizadas.\n\n` +
+            `Nenhuma das ${linhas.length} viagens de ${data} tem status ${status.join(" ou ")}. ` +
+            `Verifique se o export do GPS é da data certa (data futura vem toda como "Não iniciado").`
+        );
+    }
+}
+
+
+// ----------------------------------------------------------
+// Lê a bilhetagem recortada no dia operacional do GPS.
+// Reaproveita o recorte se o dia não mudou.
+// ----------------------------------------------------------
+async function _carregarPaxDoDia() {
+    if (!AppState.paxFiles.length || !AppState.rawGps?.length) return;
+
+    const normGps = new DataNormalizer(APP_CONFIG.fontes.gps);
+    const dia     = normGps.normalize(AppState.rawGps[0]).data;
+    if (AppState.rawPax && AppState.paxDia === dia) return;
+
+    AppState.rawPax = null;
+    UIController.showLoader(`Lendo bilhetagem do dia ${dia}...`);
+    try {
+        const { linhas, resumo } = await PaxCorte.carregar(AppState.paxFiles, dia, (f) => {
+            UIController.showLoader(`Lendo bilhetagem do dia ${dia}... ${Math.round(f * 100)}%`);
+        });
+        if (linhas.length === 0) throw new Error(resumo.alertas[0]);
+        AppState.rawPax   = linhas;
+        AppState.paxDia   = dia;
+        AppState.paxCorte = resumo;
+        console.log("[PaxCorte]", dia, resumo);
+    } finally {
+        UIController.hideLoader();
+    }
+
+    const r = AppState.paxCorte;
+    UIController.setStatusBadge(
+        `Bilhetagem ${dia}: ${r.noDia.toLocaleString("pt-BR")} registros ` +
+        `(+${r.doDiaSeguinte} da madrugada seguinte, ` +
+        `-${r.daNoiteAnterior} da noite anterior` +
+        (r.duplicados ? `, ${r.duplicados.toLocaleString("pt-BR")} repetidos entre arquivos` : "") + `)`,
+        r.alertas.length ? "danger" : r.avisos.length ? "warning" : "success"
+    );
+
+    // Alertas: faltam dados do próprio dia. Avisos: virada do dia (opcional).
+    const blocos = [];
+    if (r.alertas.length) {
+        blocos.push(`ATENÇÃO — dados do dia\n\n• ${r.alertas.join("\n\n• ")}`);
+    }
+    if (r.avisos.length) {
+        blocos.push(
+            `Virada do dia — arquivo adicional OPCIONAL\n` +
+            `(não é obrigatório: o processamento segue normalmente)\n\n` +
+            `• ${r.avisos.join("\n\n• ")}`
+        );
+    }
+    if (blocos.length) alert(`Bilhetagem\n\n${blocos.join("\n\n────────────\n\n")}`);
+}
+
+
+// ----------------------------------------------------------
 // Detecção de empresas presentes nos dados
 // Chamado ao clicar em "Processar"
 // ----------------------------------------------------------
-function detectarEmpresas() {
+async function detectarEmpresas() {
     if (!AppState.rawGps) return;
+
+    try {
+        await _carregarPaxDoDia();
+    } catch (err) {
+        UIController.setStatusBadge("Erro ao ler bilhetagem.", "danger");
+        alert(`Erro: ${err.message}`);
+        return;
+    }
 
     const normGps = new DataNormalizer(APP_CONFIG.fontes.gps);
     const normPax = new DataNormalizer(APP_CONFIG.fontes.bilhetagem);

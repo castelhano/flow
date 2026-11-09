@@ -30,6 +30,7 @@ class Engine {
     // ----------------------------------------------------------
     process(empresasConciliacao = null) {
         const session = this._buildSession(empresasConciliacao);
+        this._tempoContinuo = true;
 
         // Define o escopo ANTES das etapas para que _etapaC filtre corretamente.
         // Sem isso, _etapaC processa todos os passageiros (conciliadas = []) e pode
@@ -60,9 +61,16 @@ class Engine {
             .filter(s => !s.ignorar)
             .map(s => s.value);
 
+        // Dia operacional (coluna Data do GPS) — referência da linha do tempo
+        const dataOperacao = this._rawGps[0]?.data || "";
+        this._dia0 = Engine._diaIndex(dataOperacao);
+
         const viagens = this._rawGps
             .filter(r => statusAtivos.includes(String(r.statusViagem)))
             .map((r, idx) => this._buildViagem(r, idx));
+
+        // Viagens da madrugada que encerram a noite do dia → 1440+
+        this._ajustarMadrugadaGps(viagens);
 
         // --- Passageiros (Bilhetagem) ---
         // Linhas ignoradas são excluídas da conciliação mas preservadas no modelo
@@ -97,7 +105,11 @@ class Engine {
             paxIgnorados,         // linhas sem correspondência no GPS (preservados para outros usos)
 
             // Data de operação extraída do primeiro registro GPS (formato bruto do arquivo)
-            dataOperacao: this._rawGps[0]?.data || "",
+            dataOperacao,
+
+            // Linha do tempo contínua do dia operacional: madrugada seguinte em 1440+
+            // (sessões salvas antes desta versão não têm a flag e usam _ajustarPernoite)
+            tempoContinuo: true,
 
             // Índices internos (usados pelo Engine e módulos — não exportados)
             _idx: { viagensPorVeiculo, paxPorVeiculo, viagensPorTabela },
@@ -131,11 +143,12 @@ class Engine {
         const hIni = isOmissao ? r.partidaPlanejada  : r.partidaReal;
         const hFim = isOmissao ? r.chegadaPlanejada  : r.chegadaReal;
 
-        let mInicio = this._toMin(hIni);
-        let mFim    = this._toMin(hFim);
+        const mInicio = this._toMin(hIni) ?? 0;
+        let   mFim    = this._toMin(hFim) ?? mInicio;
 
         // Virada de dia: chegada menor que partida = passou da meia-noite
-        const pernoite = mFim > 0 && mFim < mInicio;
+        // (inclui chegada 00:00:xx, que antes era lida como "sem horário")
+        const pernoite = mFim < mInicio;
         if (pernoite) mFim += 1440;
 
         return {
@@ -185,8 +198,9 @@ class Engine {
             tipo:    r.tipo     || "",
             tarifa:  r.tarifa   || "",
 
-            // Horário em minutos (usado pelo Engine)
-            mHorario: this._toMin(r.horario),
+            // Horário em minutos na linha do tempo do dia operacional
+            // (madrugada do dia seguinte → 1440+)
+            mHorario: this._minOperacional(r.horario),
 
             // Conciliação
             assigned:          false,
@@ -545,6 +559,7 @@ class Engine {
     static conciliarIncremental(session, empresasConciliacao) {
         const empresasSet = new Set(empresasConciliacao);
         const engine = new Engine();
+        engine._tempoContinuo = session.tempoContinuo === true;
 
         // Re-aplica normalizações do settings atual sobre os dados do session
         // Seguro: valores canônicos não são chaves no mapeamento, então é idempotente.
@@ -661,18 +676,93 @@ class Engine {
         viagem.paxEfetivos.push(pax.id);
     }
 
-    // Ajusta minutos do passageiro para comparação com viagem de pernoite
+    // Ajusta minutos do passageiro para comparação com viagem de pernoite.
+    // Só para sessões antigas (sem tempoContinuo): na linha do tempo contínua
+    // o horário do passageiro já está no lugar certo.
     _ajustarPernoite(pMin, viagem) {
+        if (this._tempoContinuo) return pMin;
         if (viagem.pernoite && pMin < viagem.mInicio) return pMin + 1440;
         return pMin;
     }
 
-    // Converte "HH:mm", "HH:mm:ss" ou "DD/MM/AAAA HH:mm:ss" em minutos do dia
+    // Converte "HH:mm", "HH:mm:ss" ou "DD/MM/AAAA HH:mm:ss" em minutos do dia.
+    // Retorna null quando não há horário.
     _toMin(str) {
-        if (!str) return 0;
+        if (!str) return null;
         const match = String(str).match(/(\d{2}):(\d{2})/);
-        if (!match) return 0;
+        if (!match) return null;
         return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+    }
+
+    // Minutos do horário do passageiro em relação à meia-noite do dia operacional.
+    // Usa a data do próprio horário: dia seguinte → +1440. Sem data → minuto do dia.
+    _minOperacional(str) {
+        const min = this._toMin(str) ?? 0;
+        const dia = Engine._diaIndex(str);
+        if (dia === null || this._dia0 === null || this._dia0 === undefined) return min;
+        return (dia - this._dia0) * 1440 + min;
+    }
+
+    // Índice do dia (dias desde 1970) a partir de "DD/MM/AAAA..." ou "AAAA-MM-DD..."
+    static _diaIndex(str) {
+        const s = String(str || "");
+        let m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+        if (m) return Date.UTC(+m[3], +m[2] - 1, +m[1]) / 86400000;
+        m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+        if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000;
+        return null;
+    }
+
+    // ----------------------------------------------------------
+    // Virada do dia no GPS
+    // O GPS do dia D traz, com horário 00:xx–02:xx, tanto viagens que
+    // ENCERRAM a noite de D quanto viagens que ABREM o dia D. É do fim
+    // da noite a viagem que encadeia (pausa < gapJornadaMin) com a
+    // última viagem da noite do mesmo carro; essas vão para 1440+.
+    // Viagem sem veículo (ex: omissão) usa a tabela (empresa+linha+tabela).
+    // A partir de horaCorte vale o horário do calendário.
+    // ----------------------------------------------------------
+    _ajustarMadrugadaGps(viagens) {
+        const cfg      = APP_CONFIG.engine.virada;
+        const corteMin = cfg.horaCorte * 60;
+        const gap      = cfg.gapJornadaMin;
+
+        const valido = (x) => !!x && x !== "-" && String(x).toLowerCase() !== "nan";
+        const chaveTabela = (v) => valido(v.tabela) ? `${v.empresa}|${v.linha_base}|${v.tabela}` : null;
+
+        const porVeiculo = {}, porTabela = {};
+        for (const v of viagens) {
+            if (valido(v.veiculo)) (porVeiculo[v.veiculo] = porVeiculo[v.veiculo] || []).push(v);
+            const kt = chaveTabela(v);
+            if (kt) (porTabela[kt] = porTabela[kt] || []).push(v);
+        }
+
+        // Encadeia as viagens da madrugada de um grupo a partir do fim da noite.
+        // "proprias" diz quais viagens da madrugada este grupo pode mover.
+        const encadear = (grupo, proprias) => {
+            // Inclui viagens já movidas para 1440+ (passada por veículo)
+            const dia = grupo.filter(v => v.mInicio >= corteMin);
+            if (dia.length === 0) return;
+            let fimNoite = Math.max(...dia.map(v => v.mFim));
+
+            const madrugada = grupo
+                .filter(v => v.mInicio < corteMin)
+                .sort((a, b) => a.mInicio - b.mInicio);
+
+            for (const v of madrugada) {
+                if (v.mInicio + 1440 - fimNoite >= gap) break;
+                if (proprias(v)) {
+                    v.mInicio += 1440;
+                    v.mFim    += 1440;
+                    v.pernoite = false;
+                    v.madrugadaSeguinte = true;
+                }
+                fimNoite = Math.max(fimNoite, v.mFim < 1440 ? v.mFim + 1440 : v.mFim);
+            }
+        };
+
+        for (const grupo of Object.values(porVeiculo)) encadear(grupo, () => true);
+        for (const grupo of Object.values(porTabela))  encadear(grupo, v => !valido(v.veiculo));
     }
 
     // Agrupa array de objetos por valor de uma chave

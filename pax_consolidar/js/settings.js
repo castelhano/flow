@@ -128,6 +128,21 @@ const APP_CONFIG = {
     // ----------------------------------------------------------
     engine: {
 
+        // --- Virada do dia operacional ---
+        // A operação de um dia passa da meia-noite. Registros da madrugada
+        // (antes de horaCorte) pertencem ao dia ANTERIOR quando são continuação
+        // de uma jornada do mesmo veículo iniciada antes da meia-noite, sem
+        // pausa >= gapJornadaMin. Jornada que começa do zero na madrugada é do
+        // dia novo (ex: carro que pega às 02h e roda o dia inteiro).
+        // A partir de horaCorte vale sempre a data do calendário.
+        // Mesma regra para bilhetagem (validações) e GPS (viagens).
+        // Na linha do tempo do Engine, o dia D vai de 0 a ~1620 min:
+        // a madrugada seguinte fica em 1440+.
+        virada: {
+            horaCorte:     3,    // horas
+            gapJornadaMin: 120   // minutos
+        },
+
         // Classificação dos status de viagem no GPS
         // value    : código bruto que vem no arquivo
         // concilia : participa das etapas A e B (recebe passageiros automaticamente)

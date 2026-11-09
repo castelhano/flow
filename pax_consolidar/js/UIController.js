@@ -512,8 +512,10 @@ const UIController = {
             if (fEmp   && p.empresa !== fEmp)                          return false;
             if (fVeic  && !String(p.veiculo).includes(fVeic))         return false;
             if (fLinha && !p.linha_consolidada.toLowerCase().includes(fLinha))     return false;
-            if (mIni !== null && p.mHorario < mIni)                   return false;
-            if (mFim !== null && p.mHorario > mFim)                   return false;
+            // Filtro por hora do relógio (madrugada seguinte fica em 1440+)
+            const mDia = ((p.mHorario % 1440) + 1440) % 1440;
+            if (mIni !== null && mDia < mIni)                         return false;
+            if (mFim !== null && mDia > mFim)                         return false;
             return true;
         });
 
@@ -846,7 +848,7 @@ const UIController = {
         for (const v of viaF) {
             const linha   = v.linha_base || "—";
             const sentido = v.sentido    || "UNICO";
-            const hora    = Math.min(Math.max(Math.floor(v.mInicio / 60), 0), 23);
+            const hora    = Math.min(Math.max(Math.floor((v.mInicio % 1440) / 60), 0), 23);
             if (!viaMapa[linha])          viaMapa[linha] = {};
             if (!viaMapa[linha][sentido]) viaMapa[linha][sentido] = {};
             viaMapa[linha][sentido][hora] = (viaMapa[linha][sentido][hora] || 0) + 1;

@@ -404,10 +404,11 @@
 
             <!-- Bilhetagem -->
             <div class="drop-zone" id="drop-pax">
-                <input type="file" id="input-pax" class="hidden" accept=".csv">
+                <input type="file" id="input-pax" class="hidden" accept=".csv" multiple>
                 <i data-lucide="users"></i>
                 <strong>Bilhetagem</strong>
-                <p>.csv — passageiros do dia</p>
+                <p>.csv — 1 ou mais arquivos/períodos (recorta pelo dia do GPS)</p>
+                <span class="file-name hidden" id="pax-limpar" title="Remover arquivos de bilhetagem" style="cursor:pointer; text-decoration:underline;">limpar</span>
             </div>
 
             <!-- Importar trabalho -->
@@ -783,6 +784,7 @@
 <script src="js/settings.js"></script>
 <script src="js/DataNormalizer.js"></script>
 <script src="js/Parser.js"></script>
+<script src="js/PaxCorte.js"></script>
 <script src="js/Engine.js"></script>
 <script src="js/Storage.js"></script>
 <script src="js/UIController.js"></script>
@@ -817,8 +819,42 @@ function setupDropZone(cardId, inputId, tipo) {
 }
 
 setupDropZone('drop-gps',  'input-gps',  'gps');
-setupDropZone('drop-pax',  'input-pax',  'pax');
 setupDropZone('drop-json', 'input-json',  null);
+
+// Bilhetagem: aceita vários arquivos (períodos). Cada seleção SOMA à lista;
+// "limpar" zera. Arquivos de períodos vizinhos completam a virada do dia.
+(function setupDropZonePax() {
+    const card   = document.getElementById('drop-pax');
+    const input  = document.getElementById('input-pax');
+    const limpar = document.getElementById('pax-limpar');
+    const texto  = card.querySelector('p');
+    const textoOriginal = texto.innerText;
+
+    const render = () => {
+        const nomes = (AppState.paxFiles || []).map(f => f.name);
+        card.classList.toggle('loaded', nomes.length > 0);
+        limpar.classList.toggle('hidden', nomes.length === 0);
+        texto.innerText = nomes.length === 0 ? textoOriginal
+                        : nomes.length === 1 ? nomes[0]
+                        : `${nomes.length} arquivos: ${nomes.join(' + ')}`;
+        card.title = nomes.join('\n');
+    };
+
+    card.addEventListener('click', () => input.click());
+    input.addEventListener('click', e => e.stopPropagation());
+    input.addEventListener('change', async e => {
+        const files = [...e.target.files];
+        input.value = '';
+        if (!files.length) return;
+        await handleFileSelect('pax', files);
+        render();
+    });
+    limpar.addEventListener('click', e => {
+        e.stopPropagation();
+        limparBilhetagem();
+        render();
+    });
+})();
 
 document.getElementById('input-json').addEventListener('change', e => {
     Storage.importJSON(e.target.files[0]);
