@@ -125,7 +125,8 @@
         <div class="table-wrap">
             <table>
                 <thead>
-                    <tr><th>Data</th><th>Linha</th><th>Eventos</th><th>Sugestão</th><th>Código</th><th>Confirmar</th></tr>
+                    <tr><th>Data</th><th>Linha</th><th>Eventos</th><th>Sugestão</th><th>Código</th>
+                        <th><label class="th-todos" title="Marcar/desmarcar todos"><input type="checkbox" id="programacao-todos"> Confirmar</label></th></tr>
                 </thead>
                 <tbody id="programacao-body"></tbody>
             </table>
@@ -150,7 +151,17 @@
         <div class="table-wrap">
             <table>
                 <thead>
-                    <tr><th>Data</th><th>Linha</th><th>Tabela</th><th>Motivo</th><th>Eventos (dia no arquivo → dia pela regra)</th><th>Decisão</th></tr>
+                    <tr><th>Data</th><th>Linha</th><th>Tabela</th><th>Motivo</th><th>Eventos (dia no arquivo → dia pela regra)</th>
+                        <th>
+                            <div class="th-todos">Decisão
+                                <select id="duvidas-todos" class="duvida-select" title="Aplicar a mesma decisão em todas as tabelas">
+                                    <option value="">Todos...</option>
+                                    <option value="manter">Manter dias do arquivo</option>
+                                    <option value="corrigir">Aplicar dias da regra</option>
+                                    <option value="limpar">Limpar decisões</option>
+                                </select>
+                            </div>
+                        </th></tr>
                 </thead>
                 <tbody id="duvidas-body"></tbody>
             </table>

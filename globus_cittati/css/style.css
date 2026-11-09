@@ -84,6 +84,29 @@
 
 .duvida-eventos { white-space: pre-line; }
 
+/* Controles "todos" no cabeçalho das etapas de confirmação */
+.th-todos {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+.th-todos .duvida-select { text-transform: none; letter-spacing: normal; font-weight: 400; }
+
+/* Checkbox "todos" parcialmente marcado */
+input[type="checkbox"]:indeterminate {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+input[type="checkbox"]:indeterminate::after {
+    content: '';
+    position: absolute;
+    left: 3px; top: 5.5px;
+    width: 6px; height: 1.5px;
+    background: white;
+}
+input[type="checkbox"]:disabled { opacity: .4; cursor: not-allowed; }
+
 .duvida-select,
 .prog-input {
     background: var(--bg-3);

@@ -41,10 +41,12 @@ const el = {
     sectionProgramacao: $("section-programacao"),
     programacaoNum: $("programacao-num"),
     programacaoBody: $("programacao-body"),
+    programacaoTodos: $("programacao-todos"),
 
     sectionDuvidas: $("section-duvidas"),
     duvidasNum: $("duvidas-num"),
     duvidasBody: $("duvidas-body"),
+    duvidasTodos: $("duvidas-todos"),
 
     sectionExportar: $("section-exportar"),
     exportarNum: $("exportar-num"),
@@ -177,7 +179,19 @@ function renderEtapas() {
     el.exportarNum.textContent = proxima();
 }
 
+// Checkboxes de confirmação da etapa de programação (para o "todos")
+let checksProgramacao = [];   // [{ programacao, confirmar }]
+
+function sincronizarTodosProgramacao() {
+    const marcaveis = checksProgramacao.filter(c => c.programacao.codigo);
+    const marcados  = marcaveis.filter(c => c.programacao.confirmado).length;
+    el.programacaoTodos.disabled      = marcaveis.length === 0;
+    el.programacaoTodos.checked       = marcaveis.length > 0 && marcados === marcaveis.length;
+    el.programacaoTodos.indeterminate = marcados > 0 && marcados < marcaveis.length;
+}
+
 function renderProgramacao() {
+    checksProgramacao = [];
     el.programacaoBody.replaceChildren(...state.analise.semProgramacao.map(item => {
         const programacao = state.programacoes[item.chave];
         const tr = document.createElement("tr");
@@ -203,12 +217,15 @@ function renderProgramacao() {
             programacao.confirmado = false;
             confirmar.checked = false;
             confirmar.disabled = !programacao.codigo;
+            sincronizarTodosProgramacao();
             atualizarResultado();
         });
         confirmar.addEventListener("change", () => {
             programacao.confirmado = confirmar.checked;
+            sincronizarTodosProgramacao();
             atualizarResultado();
         });
+        checksProgramacao.push({ programacao, confirmar });
 
         const tdInput = document.createElement("td");
         tdInput.appendChild(input);
@@ -217,6 +234,7 @@ function renderProgramacao() {
         tr.append(tdInput, tdConfirmar);
         return tr;
     }));
+    sincronizarTodosProgramacao();
 }
 
 function programacoesConfirmadas() {
@@ -227,7 +245,12 @@ function programacoesConfirmadas() {
     );
 }
 
+// Selects de decisão da etapa de dias (para o "todos")
+let selectsDuvidas = [];   // [{ grupo, select }]
+
 function renderDuvidas() {
+    selectsDuvidas = [];
+    el.duvidasTodos.value = "";
     el.duvidasBody.replaceChildren(...state.analise.duvidas.map(grupo => {
         const tr = document.createElement("tr");
         const eventos = grupo.divergencias.map(({ evento, atual, esperado }) => {
@@ -251,6 +274,7 @@ function renderDuvidas() {
             else delete state.decisoes[grupo.chave];
             atualizarResultado();
         });
+        selectsDuvidas.push({ grupo, select });
 
         const td = document.createElement("td");
         td.appendChild(select);
@@ -332,6 +356,35 @@ el.dropZone.addEventListener("drop", e => {
     e.preventDefault();
     el.dropZone.classList.remove("dragover");
     carregarArquivo(e.dataTransfer.files[0]);
+});
+
+// Marcar/desmarcar todas as programações (só as que têm código)
+el.programacaoTodos.addEventListener("change", () => {
+    const marcar = el.programacaoTodos.checked;
+    for (const { programacao, confirmar } of checksProgramacao) {
+        if (!programacao.codigo) continue;
+        programacao.confirmado = marcar;
+        confirmar.checked = marcar;
+    }
+    sincronizarTodosProgramacao();
+    atualizarResultado();
+});
+
+// Mesma decisão para todas as tabelas em dúvida (ou limpa todas)
+el.duvidasTodos.addEventListener("change", () => {
+    const valor = el.duvidasTodos.value;
+    if (!valor) return;
+    for (const { grupo, select } of selectsDuvidas) {
+        if (valor === "limpar") {
+            select.value = "";
+            delete state.decisoes[grupo.chave];
+        } else {
+            select.value = valor;
+            state.decisoes[grupo.chave] = valor;
+        }
+    }
+    el.duvidasTodos.value = "";
+    atualizarResultado();
 });
 
 el.btnProg.addEventListener("click", () => exportarArquivo("prog"));
