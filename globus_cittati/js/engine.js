@@ -13,17 +13,30 @@ const GlobusEngine = (() => {
 
     const COL = {
         LINHA: 0, TIPO_DIA: 1, PROGRAMACAO: 2, TABELA: 4, SAIDA: 5, CHEGADA: 6, SEQ: 7, CODIGO: 8, FLAG: 9, SENTIDO: 10,
-        H_INICIO: 11, H_FIM: 12, DIA_INICIO: 13, DIA_FIM: 14,
+        H_INICIO: 11, H_FIM: 12, DIA_INICIO: 13, DIA_FIM: 14, H_GARAGEM: 17,
         QTD_VIAGENS: 19, QTD_VEICULOS: 20, DATA_ESCALA: 21, PREFIXO: 22, MATRICULA: 23, NOME: 25,
     };
 
-    // Vazio = viagem normal: o Globus não preenche o código nesses eventos
-    const CODIGOS_PERMITIDOS = new Set(["", "2", "3", "5", "8", "10"]);
+    // Atividades da Cittati (campo CODIGO). Qualquer outro código é removido.
+    const ATIVIDADES = {
+        REFEICAO: "1",
+        RENDICAO: "2",
+        RECOLHE: "3",
+        SAIDA_GARAGEM: "5",
+        TRANSFERENCIA: "8",
+        VIAGEM_NORMAL: "10",
+    };
+
+    // Vazio = viagem normal: o Globus não preenche o código nesses eventos.
+    // Refeição (1) não é aceita hoje; para aceitar, basta incluir aqui.
+    const CODIGOS_PERMITIDOS = new Set(["", ATIVIDADES.RENDICAO, ATIVIDADES.RECOLHE,
+        ATIVIDADES.SAIDA_GARAGEM, ATIVIDADES.TRANSFERENCIA, ATIVIDADES.VIAGEM_NORMAL]);
 
     // Ordem de exibição das críticas; as resumidas aparecem em uma linha só na tela
     const ORDEM_CRITICAS = [
         "Tabela sem carro", "Tabela sem condutor", "Carro sobreposto", "Condutor sobreposto",
-        "Horário incoerente", "Viagens não conferem", "Improdutivo sem código",
+        "Horário incoerente", "Saída de garagem inválida", "Saída sem recolhimento anterior",
+        "Recolheu sem saída de garagem", "Viagens não conferem", "Improdutivo sem código",
     ];
     const CRITICAS_RESUMIDAS = new Set(["Improdutivo sem código"]);
 
@@ -448,6 +461,138 @@ const GlobusEngine = (() => {
         return criticas;
     }
 
+    // ----------------------------------------------------------
+    // Saída de garagem (atividade 5)
+    //
+    // O Globus manda o horário da garagem no campo H_GARAGEM do primeiro
+    // evento da tabela, mas quem sai da garagem é o carro. O evento novo
+    // termina no primeiro evento do carro (prefixo) depois desse horário,
+    // que pode estar em outra linha (308 → 308B, 410 → A22B), e entra
+    // na tabela desse evento, logo antes dele.
+    // ----------------------------------------------------------
+    function instante(campos, qual) {
+        const [dia, hora] = qual === "inicio"
+            ? [COL.DIA_INICIO, COL.H_INICIO]
+            : [COL.DIA_FIM, COL.H_FIM];
+        return (Number(campos[dia]) - 1) * 1440 + minutos(campos[hora]);
+    }
+
+    // Eventos de cada carro no dia, em ordem cronológica
+    function movimentacaoDosCarros(grupos) {
+        const porCarro = new Map();
+        for (const grupo of grupos) {
+            for (const evento of grupo.eventos) {
+                const carro = evento.campos[COL.PREFIXO].trim();
+                if (!carro) continue;
+                const chave = `${evento.campos[COL.DATA_ESCALA]}|${carro}`;
+                if (!porCarro.has(chave)) porCarro.set(chave, []);
+                porCarro.get(chave).push({ grupo, evento });
+            }
+        }
+        for (const lista of porCarro.values()) {
+            lista.sort((a, b) => instante(a.evento.campos, "inicio") - instante(b.evento.campos, "inicio"));
+        }
+        return porCarro;
+    }
+
+    function gerarSaidasGaragem(grupos) {
+        const porCarro = movimentacaoDosCarros(grupos);
+        const saidas = [];
+        const criticas = [];
+        const destinos = new Set();
+
+        for (const grupo of grupos) {
+            const origem = grupo.eventos.find(e => e.campos[COL.H_GARAGEM].trim());
+            if (!origem) continue;
+
+            const hora = origem.campos[COL.H_GARAGEM].trim();
+            const { data, linha, tabela } = grupo;
+            const invalida = detalhe => criticas.push({ tipo: "Saída de garagem inválida", data, linha, tabela, detalhe });
+
+            if (!horaValida(hora)) {
+                invalida(`Horário ${hora} (ajustar no ERP)`);
+                continue;
+            }
+
+            // Garagem antes da meia-noite e 1ª viagem depois: a saída fica no dia anterior
+            const inicioOrigem = minutos(origem.campos[COL.H_INICIO]);
+            const diaOrigem = Number(origem.campos[COL.DIA_INICIO]);
+            const garagem = minutos(hora);
+            if (garagem > inicioOrigem && !virouMeiaNoite(garagem, inicioOrigem)) {
+                invalida(`Garagem ${formatarHora(hora)} depois do início ${formatarHora(origem.campos[COL.H_INICIO])} (ajustar no ERP)`);
+                continue;
+            }
+            const diaGaragem = garagem > inicioOrigem ? diaOrigem - 1 : diaOrigem;
+            if (diaGaragem < 1) {
+                invalida(`Garagem ${formatarHora(hora)} cai no dia anterior ao da escala`);
+                continue;
+            }
+            const momento = (diaGaragem - 1) * 1440 + garagem;
+
+            // Primeiro evento do carro depois da garagem; sem carro, fica na própria tabela
+            const carro = origem.campos[COL.PREFIXO].trim();
+            const movimentacao = carro ? porCarro.get(`${data}|${carro}`) : [];
+            const destino = movimentacao.find(m => instante(m.evento.campos, "inicio") >= momento)
+                || { grupo, evento: origem };
+
+            if (destinos.has(destino.evento)) continue;
+            destinos.add(destino.evento);
+
+            const anterior = movimentacao.filter(m => instante(m.evento.campos, "inicio") < momento).pop();
+            if (anterior && anterior.evento.campos[COL.CODIGO].trim() !== ATIVIDADES.RECOLHE) {
+                const a = dadosEvento(anterior.evento.campos);
+                criticas.push({
+                    tipo: "Saída sem recolhimento anterior",
+                    data, linha, tabela,
+                    detalhe: `${carro}: sai ${formatarHora(hora)}, antes estava na ${a.linha}/${a.tabela} até ${a.fim}`,
+                });
+            }
+
+            const base = destino.evento.campos;
+            const campos = [...base];
+            campos[COL.CODIGO] = ATIVIDADES.SAIDA_GARAGEM;
+            campos[COL.FLAG] = "0";
+            campos[COL.SAIDA] = "";
+            campos[COL.CHEGADA] = base[COL.SAIDA];
+            campos[COL.H_INICIO] = hora;
+            campos[COL.H_FIM] = base[COL.H_INICIO];
+            campos[COL.DIA_INICIO] = String(diaGaragem);
+            campos[COL.DIA_FIM] = base[COL.DIA_INICIO];
+            campos[COL.H_GARAGEM] = "";
+
+            // Número fracionário: na ordem do arquivo, fica logo antes do evento de destino
+            const novo = { numero: destino.evento.numero - 0.5, campos, saidaGaragem: true };
+            const lista = destino.grupo.eventos;
+            lista.splice(lista.indexOf(destino.evento), 0, novo);
+            saidas.push({ evento: novo, origem: { linha, tabela } });
+        }
+
+        return { saidas, criticas };
+    }
+
+    // Depois de um recolhimento o carro só volta a rodar saindo da garagem
+    function criticasDeRecolhimento(grupos) {
+        const criticas = [];
+        for (const [chave, lista] of movimentacaoDosCarros(grupos)) {
+            const [data, carro] = chave.split("|");
+            lista.slice(1).forEach(({ evento }, i) => {
+                const anterior = lista[i].evento;
+                if (anterior.campos[COL.CODIGO].trim() !== ATIVIDADES.RECOLHE || evento.saidaGaragem) return;
+
+                const a = dadosEvento(anterior.campos);
+                const b = dadosEvento(evento.campos);
+                criticas.push({
+                    tipo: "Recolheu sem saída de garagem",
+                    data,
+                    linha: a.linha === b.linha ? a.linha : `${a.linha}, ${b.linha}`,
+                    tabela: a.tabela === b.tabela ? a.tabela : `${a.tabela}, ${b.tabela}`,
+                    detalhe: `${carro}: recolhe ${a.inicio}–${a.fim}, volta ${b.inicio}`,
+                });
+            });
+        }
+        return criticas;
+    }
+
     // Trabalha sobre uma cópia: a análise original continua valendo
     // quando o usuário muda uma decisão na etapa de confirmação.
     function resolver(analise, decisoes = {}, programacoes = {}) {
@@ -463,7 +608,15 @@ const GlobusEngine = (() => {
 
         const alteracoesDia = grupos.flatMap(g => aplicarDias(g, decisoes));
 
+        const garagem = gerarSaidasGaragem(grupos);
+
         const sequenciasAlteradas = grupos.reduce((total, g) => total + renumerar(g), 0);
+
+        const saidasGaragem = garagem.saidas.map(({ evento, origem }) => ({
+            ...dadosEvento(evento.campos),
+            origem: origem.linha === evento.campos[COL.LINHA] && origem.tabela === evento.campos[COL.TABELA]
+                ? "" : `${origem.linha}/${origem.tabela}`,
+        }));
 
         const eventos = grupos
             .flatMap(g => g.eventos)
@@ -485,10 +638,13 @@ const GlobusEngine = (() => {
             alteracoesDia,
             programacoesPreenchidas,
             sequenciasAlteradas,
+            saidasGaragem,
             criticas: [
                 ...criticasPorTabela(grupos),
                 ...criticasDeViagens(eventos),
                 ...criticasDeSobreposicao(eventos),
+                ...garagem.criticas,
+                ...criticasDeRecolhimento(grupos),
             ].sort((a, b) => ORDEM_CRITICAS.indexOf(a.tipo) - ORDEM_CRITICAS.indexOf(b.tipo)),
         };
     }

@@ -12,6 +12,7 @@ const state = {
 const REMOCAO = "Evento removido";
 const DIA = "Dia corrigido";
 const PROGRAMACAO = "Programação preenchida";
+const GARAGEM = "Saída de garagem incluída";
 
 // ============================================================
 // DOM refs
@@ -161,7 +162,11 @@ function listarAlteracoes() {
     const dias = state.resultado.alteracoesDia.map(a => (
         [DIA, a.data, a.linha, a.tabela, a.seq, `${a.inicio}–${a.fim}`, a.de, a.para]
     ));
-    return [...remocoes, ...programacoes, ...dias];
+    const garagem = state.resultado.saidasGaragem.map(g => [
+        g.origem ? `${GARAGEM} (horário da ${g.origem})` : GARAGEM,
+        g.data, g.linha, g.tabela, g.seq, `${g.inicio}–${g.fim}`, "—", "—",
+    ]);
+    return [...remocoes, ...programacoes, ...dias, ...garagem];
 }
 
 // As etapas de confirmação só aparecem quando há o que confirmar
@@ -286,7 +291,7 @@ function renderDuvidas() {
 function atualizarResultado() {
     const { analise } = state;
     state.resultado = GlobusEngine.resolver(analise, state.decisoes, programacoesConfirmadas());
-    const { alteracoesDia, criticas, totalLinhas, sequenciasAlteradas } = state.resultado;
+    const { alteracoesDia, criticas, totalLinhas, sequenciasAlteradas, saidasGaragem } = state.resultado;
 
     el.statLidas.textContent = analise.totalLinhas;
     el.statTabelas.textContent = analise.grupos.length;
@@ -313,7 +318,7 @@ function atualizarResultado() {
     el.sectionExportar.classList.remove("hidden");
     el.exportarResumo.textContent = pendentes
         ? `Faltam ${pendentes} confirmação(ões) nas etapas anteriores.`
-        : `${totalLinhas} linhas no arquivo final, ${sequenciasAlteradas} sequência(s) renumerada(s). As críticas não bloqueiam a exportação.`;
+        : `${totalLinhas} linhas no arquivo final, ${saidasGaragem.length} saída(s) de garagem incluída(s), ${sequenciasAlteradas} sequência(s) renumerada(s). As críticas não bloqueiam a exportação.`;
     el.statusBadge.textContent = pendentes ? "Aguardando confirmação" : "Pronto para exportar";
 }
 
