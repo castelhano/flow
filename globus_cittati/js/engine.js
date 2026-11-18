@@ -36,9 +36,21 @@ const GlobusEngine = (() => {
     const ORDEM_CRITICAS = [
         "Tabela sem carro", "Tabela sem condutor", "Carro sobreposto", "Condutor sobreposto",
         "Horário incoerente", "Saída de garagem inválida", "Saída sem recolhimento anterior",
-        "Recolheu sem saída de garagem", "Viagens não conferem", "Improdutivo sem código",
+        "Recolheu sem saída de garagem", "Linha sem garagem", "Carro em linhas de garagens diferentes",
+        "Viagens não conferem", "Improdutivo sem código",
     ];
     const CRITICAS_RESUMIDAS = new Set(["Improdutivo sem código"]);
+
+    // Garagem de cada linha (sigla da Cittati). Linha nova no Globus precisa entrar aqui;
+    // sem ela, a saída e o recolhimento ficam sem garagem e a rotina mostra uma crítica.
+    const GARAGENS = {
+        GPANT: ["107", "203", "204", "205", "213", "301", "302", "306", "308", "308B", "310", "323",
+            "330", "390", "800", "A02", "A07", "A14", "A16", "A17", "C01", "R01", "R01B", "R03"],
+        GVPAR: ["105", "225", "250", "251", "409", "410", "A22", "A22B", "A22C", "C02"],
+    };
+    const GARAGEM_DA_LINHA = new Map(
+        Object.entries(GARAGENS).flatMap(([garagem, linhas]) => linhas.map(linha => [linha, garagem]))
+    );
 
     // Recuo de horário maior que isso é virada de dia; menor é horário incoerente
     const MEIO_DIA = 720;
@@ -570,6 +582,97 @@ const GlobusEngine = (() => {
         return { saidas, criticas };
     }
 
+    // ----------------------------------------------------------
+    // Garagem da saída (origem) e do recolhimento (destino)
+    //
+    // O Globus não informa a garagem; ela vem da linha. Um carro sai e
+    // recolhe sempre na mesma garagem no dia, decidida pela linha com mais
+    // viagens no primeiro bloco do carro (até o primeiro recolhimento).
+    // Tabela sem carro: todas as viagens dela são do mesmo carro, então
+    // ela é tratada como um carro à parte.
+    // ----------------------------------------------------------
+    function operacoesDoDia(grupos) {
+        const porOperacao = new Map();
+        for (const grupo of grupos) {
+            for (const evento of grupo.eventos) {
+                const { campos } = evento;
+                const carro = campos[COL.PREFIXO].trim();
+                const chave = carro
+                    ? `${campos[COL.DATA_ESCALA]}|${carro}`
+                    : `${campos[COL.DATA_ESCALA]}|sem carro|${campos[COL.LINHA]}|${campos[COL.TABELA]}`;
+                if (!porOperacao.has(chave)) porOperacao.set(chave, { carro, data: campos[COL.DATA_ESCALA], eventos: [] });
+                porOperacao.get(chave).eventos.push(evento);
+            }
+        }
+        for (const operacao of porOperacao.values()) {
+            operacao.eventos.sort((a, b) => instante(a.campos, "inicio") - instante(b.campos, "inicio"));
+        }
+        return [...porOperacao.values()];
+    }
+
+    function linhaPredominante(eventos) {
+        const fim = eventos.findIndex(e => e.campos[COL.CODIGO].trim() === ATIVIDADES.RECOLHE);
+        const bloco = fim === -1 ? eventos : eventos.slice(0, fim + 1);
+        const viagens = bloco.filter(e => e.campos[COL.FLAG] === "1");
+
+        // Map mantém a ordem de inserção: no empate fica a linha que rodou primeiro
+        const contagem = new Map();
+        for (const { campos } of viagens.length ? viagens : bloco) {
+            contagem.set(campos[COL.LINHA], (contagem.get(campos[COL.LINHA]) || 0) + 1);
+        }
+        let melhor = null;
+        for (const [linha, total] of contagem) {
+            if (!melhor || total > melhor.total) melhor = { linha, total };
+        }
+        return melhor.linha;
+    }
+
+    function atribuirGaragens(grupos) {
+        const criticas = [];
+        const linhasSemGaragem = new Map();
+
+        for (const { carro, data, eventos } of operacoesDoDia(grupos)) {
+            const linha = linhaPredominante(eventos);
+            const garagem = GARAGEM_DA_LINHA.get(linha);
+            const tabela = eventos[0].campos[COL.TABELA];
+
+            if (!garagem) {
+                linhasSemGaragem.set(`${data}|${linha}`, { data, linha });
+                continue;
+            }
+
+            const outras = [...new Set(eventos.map(e => e.campos[COL.LINHA]))]
+                .filter(l => GARAGEM_DA_LINHA.get(l) && GARAGEM_DA_LINHA.get(l) !== garagem);
+            if (outras.length) {
+                const linhas = [...new Set(eventos.map(e => e.campos[COL.LINHA]))];
+                criticas.push({
+                    tipo: "Carro em linhas de garagens diferentes",
+                    data,
+                    linha: linhas.join(", "),
+                    tabela: "—",
+                    detalhe: `${carro || `sem carro (${tabela})`}: `
+                        + linhas.map(l => `${l} ${GARAGEM_DA_LINHA.get(l) || "?"}`).join(", ")
+                        + `. Usada ${garagem} (linha ${linha})`,
+                });
+            }
+
+            for (const { campos, saidaGaragem } of eventos) {
+                if (saidaGaragem) campos[COL.SAIDA] = garagem;
+                if (campos[COL.CODIGO].trim() === ATIVIDADES.RECOLHE) campos[COL.CHEGADA] = garagem;
+            }
+        }
+
+        for (const { data, linha } of linhasSemGaragem.values()) {
+            criticas.push({
+                tipo: "Linha sem garagem",
+                data, linha,
+                tabela: "—",
+                detalhe: "Incluir a linha em GARAGENS (engine.js); saída e recolhimento ficaram sem garagem",
+            });
+        }
+        return criticas;
+    }
+
     // Depois de um recolhimento o carro só volta a rodar saindo da garagem
     function criticasDeRecolhimento(grupos) {
         const criticas = [];
@@ -609,6 +712,7 @@ const GlobusEngine = (() => {
         const alteracoesDia = grupos.flatMap(g => aplicarDias(g, decisoes));
 
         const garagem = gerarSaidasGaragem(grupos);
+        const criticasGaragem = atribuirGaragens(grupos);
 
         const sequenciasAlteradas = grupos.reduce((total, g) => total + renumerar(g), 0);
 
@@ -644,6 +748,7 @@ const GlobusEngine = (() => {
                 ...criticasDeViagens(eventos),
                 ...criticasDeSobreposicao(eventos),
                 ...garagem.criticas,
+                ...criticasGaragem,
                 ...criticasDeRecolhimento(grupos),
             ].sort((a, b) => ORDEM_CRITICAS.indexOf(a.tipo) - ORDEM_CRITICAS.indexOf(b.tipo)),
         };
