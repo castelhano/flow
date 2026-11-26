@@ -64,6 +64,7 @@ const Revisao = {
     empresa:  null,
     data:     null,
     meta:     null,      // { biAtualizadoEm, origem }
+    viagens:  [],        // todas as viagens da empresa no dia (relatório de omissões)
     casos:    [],        // { id, viagem, itens, grupo }
     marcas:   {},        // id da viagem → "corrigido" | "certo"
     grupoAtivo: null,
@@ -283,6 +284,7 @@ const Revisao = {
             comPax: session.temBilhetagem, nPax: pax.length,
             alertasPax: resumo?.alertas || []        // faltam dados do próprio dia (a virada não importa aqui)
         };
+        this.viagens = gps;
         this.casos   = casos;
         this.marcas  = JSON.parse(localStorage.getItem(this._chaveMarcas()) || "{}");
         this.grupoAtivo = (this.GRUPOS.find(g => casos.some(c => c.grupo === g.id)) || this.GRUPOS[0]).id;
@@ -300,7 +302,9 @@ const Revisao = {
 
         if (n === 0) {
             el.innerHTML = `<div class="rv-vazio">Nenhum caso para revisar em ${Cittati.isoParaBR(this.data)} (${this._esc(this.empresa)}).` +
-                (this.meta.comPax ? "" : `<br>Sem bilhetagem: omissões com passageiros não foram analisadas.`) + `</div>`;
+                (this.meta.comPax ? "" : `<br>Sem bilhetagem: omissões com passageiros não foram analisadas.`) +
+                `<br><br>${this._botaoPdf()}</div>`;
+            if (window.lucide) lucide.createIcons();
             return;
         }
 
@@ -333,6 +337,7 @@ const Revisao = {
                     <div class="rv-progresso-fill" style="width:${Math.round(revistos / n * 100)}%"></div>
                 </div>
                 <span><b>${revistos}</b> de ${n} revistos</span>
+                ${this._botaoPdf()}
                 <button class="btn btn-primary" onclick="Revisao.salvarPendencias()">
                     <i data-lucide="save"></i> Salvar pendências
                 </button>
@@ -425,6 +430,27 @@ const Revisao = {
         const seq = x.total > 1 ? ` · ${x.parte}ª de ${x.total} viagens seguidas` : "";
         return `<div class="rv-tag" style="color:var(--text-2)">passageiros no horário: ${x.carros
             .map(k => `carro ${this._esc(k.veiculo)} (${k.pax})`).join(", ")}${seq}</div>`;
+    },
+
+    _botaoPdf() {
+        return `<button class="btn btn-ghost" onclick="Revisao.exportarOmissoes()"
+            title="Relatório das viagens não realizadas no dia, para a conferência dos fiscais">
+            <i data-lucide="file-down"></i> Omissões (PDF)
+        </button>`;
+    },
+
+    // Relatório para os fiscais: as omissões do BI como estão agora
+    // (não leva em conta as marcações "Corrigi"/"Está certo")
+    exportarOmissoes() {
+        if (!this.viagens.length) return alert("Analise um dia antes.");
+        try {
+            OmissoesPdf.gerar(this.viagens, {
+                empresa: this.empresa, data: this.data,
+                biAtualizadoEm: this.meta.biAtualizadoEm, total: this.meta.total
+            });
+        } catch (err) {
+            alert(`Erro ao gerar o PDF: ${err.message}`);
+        }
     },
 
     _grupo(id) {
