@@ -2,7 +2,7 @@
 // Cittati.js — Fonte de GPS Cittati (BI)
 //
 // Responsabilidades:
-//   1. Buscar os dias disponíveis e as viagens de um dia no serviço
+//   1. Conferir o serviço e buscar as viagens de um dia no serviço
 //      flow-api (docs/cittati_bi_servico.md), ou ler o mesmo JSON salvo
 //      em arquivo.
 //   2. Converter cada viagem do BI no mesmo formato de linha que o
@@ -30,9 +30,9 @@ const Cittati = {
     // Serviço
     // ----------------------------------------------------------
 
-    async dias() {
-        const r = await this._get("/dias");
-        return r.dias || [];
+    // { ok, biAtualizadoEm, biStatus } — ok:false quando o BI não respondeu
+    async saude() {
+        return this._get("/saude");
     },
 
     // data: "AAAA-MM-DD"
@@ -54,7 +54,9 @@ const Cittati = {
         let corpo = null;
         try { corpo = await resp.json(); } catch { /* corpo não é JSON */ }
         if (!resp.ok) {
-            throw new Error(corpo?.detalhe || corpo?.erro || `Serviço Cittati respondeu ${resp.status}.`);
+            const err = new Error(corpo?.detalhe || corpo?.erro || `Serviço Cittati respondeu ${resp.status}.`);
+            err.codigo = corpo?.erro || null;   // ex.: "dia_sem_dados"
+            throw err;
         }
         return corpo;
     },

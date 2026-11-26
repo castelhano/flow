@@ -14,19 +14,77 @@
 /* ============================================================
    ETAPA 1 — IMPORTAÇÃO
 ============================================================ */
-#section-import .drop-grid {
+/* Linha principal: GPS (Cittati ou arquivo) | Bilhetagem | Pendências.
+   Abaixo, faixa compacta com o que é menos usado. */
+#section-import .import-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    grid-template-columns: minmax(300px, 1.4fr) minmax(220px, 1fr) minmax(220px, 1fr);
     gap: 12px;
 }
-
-/* Card do GPS Cittati: tem controles próprios (não abre seletor de arquivo) */
-#drop-cittati { cursor: default; }
-#drop-cittati select {
-    width: 100%; max-width: 160px; height: 28px; font-size: 12px; font-family: var(--mono);
-    background: var(--bg-2); color: var(--text); border: 1px solid var(--border); border-radius: 4px;
+@media (max-width: 900px) {
+    #section-import .import-grid { grid-template-columns: 1fr; }
 }
-#drop-cittati .btn { height: 28px; font-size: 12px; padding: 0 12px; }
+
+/* Card do GPS: cabeçalho com o seletor de fonte + a área da fonte escolhida */
+#card-gps {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 10px;
+    background: var(--bg-2);
+}
+#card-gps .gps-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 4px;
+}
+#card-gps .gps-head strong {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 500; letter-spacing: .02em;
+}
+#card-gps .gps-head svg { width: 16px; height: 16px; color: var(--text-3); }
+#card-gps .drop-zone { flex: 1; }
+
+/* Seletor de duas opções */
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button {
+    background: transparent; color: var(--text-3); border: none; cursor: pointer;
+    font-family: var(--mono); font-size: 11px; padding: 4px 12px;
+}
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button.ativo { background: var(--accent); color: white; }
+
+/* Cittati: escolhe o dia e busca (não abre seletor de arquivo) */
+#drop-cittati { cursor: default; }
+#drop-cittati input[type=date] {
+    height: 30px; font-size: 12px; font-family: var(--mono); padding: 0 8px;
+    background: var(--bg-2); color: var(--text); border: 1px solid var(--border); border-radius: 4px;
+    color-scheme: dark;
+}
+#drop-cittati .btn { height: 30px; font-size: 12px; padding: 0 14px; }
+
+/* Faixa secundária */
+#section-import .import-secundarios {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+#section-import .import-secundarios > span {
+    font-size: 11px; font-family: var(--mono); color: var(--text-3); text-transform: uppercase; letter-spacing: .06em;
+}
+.drop-zone.mini {
+    flex-direction: row;
+    padding: 8px 14px;
+    gap: 10px;
+    text-align: left;
+}
+.drop-zone.mini svg { width: 16px; height: 16px; }
+.drop-zone.mini p { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .drop-zone {
     border: 1px dashed var(--border-hi);
@@ -404,25 +462,31 @@
             <div class="etapa-sep"></div>
         </div>
 
-        <div class="drop-grid">
+        <div class="import-grid">
 
-            <!-- GPS -->
-            <div class="drop-zone" id="drop-gps">
-                <input type="file" id="input-gps" class="hidden" accept=".csv,.json">
-                <i data-lucide="upload-cloud"></i>
-                <strong>Arquivo GPS</strong>
-                <p>.csv Sonda ou .json Cittati — viagens do dia</p>
-            </div>
-
-            <!-- GPS Cittati (BI, via serviço flow-api) -->
-            <div class="drop-zone" id="drop-cittati">
-                <i data-lucide="satellite"></i>
-                <strong>GPS Cittati</strong>
-                <div style="display:flex; gap:6px; align-items:center;">
-                    <select id="cittati-dia" disabled><option value="">carregando...</option></select>
-                    <button id="btn-cittati-buscar" class="btn btn-primary" disabled>Buscar</button>
+            <!-- GPS: Cittati (serviço flow-api) ou arquivo (.csv Sonda / .json Cittati) -->
+            <div id="card-gps">
+                <div class="gps-head">
+                    <strong><i data-lucide="satellite"></i> GPS</strong>
+                    <div class="seg" id="gps-modo">
+                        <button data-modo="cittati" onclick="UIController.modoGps('cittati')">Cittati</button>
+                        <button data-modo="arquivo" onclick="UIController.modoGps('arquivo')">Arquivo</button>
+                    </div>
                 </div>
-                <p id="cittati-info">consultando o serviço...</p>
+
+                <div class="drop-zone" id="drop-cittati">
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        <input type="date" id="cittati-dia">
+                        <button id="btn-cittati-buscar" class="btn btn-primary">Buscar</button>
+                    </div>
+                    <p id="cittati-info">consultando o serviço...</p>
+                </div>
+
+                <div class="drop-zone hidden" id="drop-gps">
+                    <input type="file" id="input-gps" class="hidden" accept=".csv,.json">
+                    <i data-lucide="upload-cloud"></i>
+                    <p>.csv Sonda ou .json Cittati — viagens do dia</p>
+                </div>
             </div>
 
             <!-- Bilhetagem -->
@@ -442,8 +506,13 @@
                 <p>.json — pendências Cittati salvas</p>
             </div>
 
+        </div>
+
+        <div class="import-secundarios">
+            <span>Outros</span>
+
             <!-- Importar trabalho -->
-            <div class="drop-zone" id="drop-json">
+            <div class="drop-zone mini" id="drop-json" title="Restaurar trabalho salvo (.json)">
                 <input type="file" id="input-json" class="hidden" accept=".json">
                 <i data-lucide="folder-sync"></i>
                 <strong>Restaurar trabalho</strong>
@@ -451,13 +520,12 @@
             </div>
 
             <!-- Oferta x Demanda -->
-            <div class="drop-zone" id="drop-oferta-demanda">
+            <div class="drop-zone mini" id="drop-oferta-demanda" title="Oferta × Demanda (.json, vários resumos)">
                 <input type="file" id="input-oferta-demanda" class="hidden" accept=".json" multiple>
                 <i data-lucide="bar-chart-2"></i>
                 <strong>Oferta × Demanda</strong>
                 <p>.json — múltiplos resumos</p>
             </div>
-
         </div>
     </section>
 

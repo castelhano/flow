@@ -82,7 +82,19 @@ const UIController = {
     // card: "gps" | "cittati"
     // ==========================================================
 
+    // Fonte do GPS no card da importação: "cittati" (serviço) ou "arquivo"
+    // (.csv Sonda / .json Cittati). Só troca o que aparece; não descarta o
+    // que já foi carregado.
+    modoGps(modo) {
+        if (modo !== "cittati" && modo !== "arquivo") modo = "cittati";
+        document.getElementById("drop-cittati")?.classList.toggle("hidden", modo !== "cittati");
+        document.getElementById("drop-gps")?.classList.toggle("hidden", modo !== "arquivo");
+        document.querySelectorAll("#gps-modo button").forEach(b => b.classList.toggle("ativo", b.dataset.modo === modo));
+        try { localStorage.setItem("pax.modoGps", modo); } catch { /* file:// sem storage */ }
+    },
+
     marcarGpsCarregado(card, texto) {
+        this.modoGps(card === "cittati" ? "cittati" : "arquivo");
         const gps  = document.getElementById("drop-gps");
         const cit  = document.getElementById("drop-cittati");
         const info = document.getElementById("cittati-info");

@@ -94,3 +94,55 @@ class DataNormalizer {
         return n - 1;
     }
 }
+
+
+// ----------------------------------------------------------
+// Validação básica do CSV — lê a primeira linha de dados
+// e verifica se os campos esperados estão nas colunas certas.
+// Lança Error com mensagem amigável se inválido.
+// Fica aqui (e não no main.js) porque a página de revisão também usa,
+// pelo PaxCorte.validar.
+// ----------------------------------------------------------
+function _validarCSV(rawData, tipo) {
+    if (!rawData || rawData.length === 0) {
+        throw new Error("Arquivo vazio ou sem registros de dados.");
+    }
+
+    const cfg   = tipo === "gps" ? APP_CONFIG.fontes.gps : APP_CONFIG.fontes.bilhetagem;
+    const label = tipo === "gps" ? "GPS" : "bilhetagem";
+    const row   = rawData[0];
+
+    for (const [field, def] of Object.entries(cfg.colunas)) {
+        if (typeof def !== "object" || !def.regex) continue;
+
+        const idx = DataNormalizer._letraParaIndice(def.coluna);
+        const val = String(row[idx] ?? "").trim();
+
+        if (!def.regex.test(val)) {
+            throw new Error(
+                `Arquivo de ${label} inválido.\n` +
+                `Campo "${field}" (coluna ${def.coluna}) — esperado: ${def.descricao}\n` +
+                `Encontrado: "${val.substring(0, 60) || "(vazio)"}"`
+            );
+        }
+    }
+
+    // Detecta arquivo trocado: se o arquivo também passa o schema do OUTRO tipo,
+    // o usuário provavelmente selecionou o arquivo errado.
+    const outroTipo  = tipo === "gps" ? "bilhetagem" : "gps";
+    const outroCfg   = outroTipo === "gps" ? APP_CONFIG.fontes.gps : APP_CONFIG.fontes.bilhetagem;
+    const outroLabel = outroTipo === "gps" ? "GPS" : "bilhetagem";
+    const passaOutro = Object.entries(outroCfg.colunas).every(([, def]) => {
+        if (typeof def !== "object" || !def.regex) return true;
+        const idx = DataNormalizer._letraParaIndice(def.coluna);
+        const val = String(row[idx] ?? "").trim();
+        return def.regex.test(val);
+    });
+    console.log(`[DEBUG _validarCSV] ${label} passou na validação. passaOutro (${outroLabel}):`, passaOutro);
+    if (passaOutro) {
+        throw new Error(
+            `Arquivo de ${label} inválido: o arquivo selecionado parece ser o de ${outroLabel}.\n` +
+            `Verifique se carregou o arquivo correto.`
+        );
+    }
+}

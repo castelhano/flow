@@ -153,18 +153,70 @@ const Pendencias = {
         };
     },
 
-    _baixar(arquivo) {
+    // Nome: pendencias_cittati_<empresa>_<data>[_rN].json (empresa só quando é uma)
+    nomeArquivo(arquivo) {
+        const emp = arquivo.empresas?.length === 1
+            ? "_" + arquivo.empresas[0].normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\W+/g, "")
+            : "";
+        return `pendencias_cittati${emp}_${arquivo.data}${arquivo.rodada > 1 ? `_r${arquivo.rodada}` : ""}.json`;
+    },
+
+    // Salva o arquivo. Com o seletor de arquivos do navegador (Chrome/Edge),
+    // o operador escolhe a pasta combinada e o navegador lembra dela da
+    // próxima vez; sem ele, vai para Downloads. Retorna o nome salvo, ou
+    // null se o operador cancelou.
+    async salvar(arquivo) {
         const agora = arquivo.geradoEm;
         for (const it of arquivo.itens) it.desde = it.desde || agora;
-        const nome = `pendencias_cittati_${arquivo.data}${arquivo.rodada > 1 ? `_r${arquivo.rodada}` : ""}.json`;
-        const blob = new Blob([JSON.stringify(arquivo, null, 1)], { type: "application/json" });
-        const url  = URL.createObjectURL(blob);
-        const a    = Object.assign(document.createElement("a"), { href: url, download: nome });
+        const nome  = this.nomeArquivo(arquivo);
+        const texto = JSON.stringify(arquivo, null, 1);
+
+        if (window.showSaveFilePicker) {
+            try {
+                const h = await window.showSaveFilePicker({
+                    id: "pendencias-cittati", suggestedName: nome,
+                    types: [{ description: "Pendências Cittati", accept: { "application/json": [".json"] } }]
+                });
+                const w = await h.createWritable();
+                await w.write(texto);
+                await w.close();
+                return h.name;
+            } catch (err) {
+                if (err.name === "AbortError") return null;
+                console.warn("[Pendencias] seletor de arquivo falhou, baixando:", err);
+            }
+        }
+        const url = URL.createObjectURL(new Blob([texto], { type: "application/json" }));
+        const a   = Object.assign(document.createElement("a"), { href: url, download: nome });
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        UIController.setStatusBadge(`${arquivo.itens.length} pendência(s) salvas em ${nome}`, "success");
+        return nome;
+    },
+
+    async _baixar(arquivo) {
+        const nome = await this.salvar(arquivo);
+        if (nome && typeof UIController !== "undefined") {
+            UIController.setStatusBadge(`${arquivo.itens.length} pendência(s) salvas em ${nome}`, "success");
+        }
+    },
+
+    // Novo arquivo com o que não foi resolvido nem ficou de fora (excluir:
+    // índices de resultados). O retrato "antes" passa a ser o de agora: na
+    // próxima conferência, "alterada" quer dizer "mudou desde esta".
+    restantes(arquivo, resultados, excluir, meta) {
+        const itens = resultados
+            .filter((r, i) => r.situacao !== "resolvida" && !excluir.has(i))
+            .map(r => r.agora ? { ...r.item, antes: r.agora, chave: { ...r.item.chave, id: r.atual.cittati.id } } : r.item);
+        return {
+            ...arquivo,
+            geradoEm:       new Date().toISOString(),
+            biAtualizadoEm: meta?.biAtualizadoEm || null,
+            rodada:         (arquivo.rodada || 1) + 1,
+            empresas:       [...new Set(itens.map(it => it.empresa))].sort(),
+            itens
+        };
     },
 
 
@@ -219,8 +271,8 @@ const Pendencias = {
                 meta: { biAtualizadoEm: r.biAtualizadoEm || null, geradoEm: r.geradoEm || null, origem: "serviço" }
             };
         } catch (err) {
-            const m = AppState.cittatiMeta;
-            if (AppState.gpsFonte === "cittati" && m?.data === data && AppState.rawGps?.length) {
+            const m = typeof AppState !== "undefined" ? AppState.cittatiMeta : null;
+            if (m && AppState.gpsFonte === "cittati" && m?.data === data && AppState.rawGps?.length) {
                 return {
                     linhas: AppState.rawGps,
                     meta: { biAtualizadoEm: m.biAtualizadoEm, geradoEm: m.geradoEm, origem: m.origem, erroServico: err.message }
@@ -513,20 +565,9 @@ const Pendencias = {
     // "antes" passa a ser o de agora: na próxima conferência, "alterada"
     // quer dizer "mudou desde esta conferência".
     _salvarRestantes() {
-        const arq = this._arquivo;
-        const itens = this._resultados
-            .filter((r, i) => r.situacao !== "resolvida" && !this._dispensados.has(i))
-            .map(r => r.agora ? { ...r.item, antes: r.agora, chave: { ...r.item.chave, id: r.atual.cittati.id } } : r.item);
-        if (itens.length === 0) return alert("Nada restante: tudo resolvido ou dispensado.");
-
-        this._baixar({
-            ...arq,
-            geradoEm:       new Date().toISOString(),
-            biAtualizadoEm: this._meta.biAtualizadoEm || null,
-            rodada:         (arq.rodada || 1) + 1,
-            empresas:       [...new Set(itens.map(it => it.empresa))].sort(),
-            itens
-        });
+        const novo = this.restantes(this._arquivo, this._resultados, this._dispensados, this._meta);
+        if (novo.itens.length === 0) return alert("Nada restante: tudo resolvido ou dispensado.");
+        this._baixar(novo);
     },
 
     _exportCSV() {

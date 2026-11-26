@@ -22,7 +22,7 @@
 // pausa >= gapJornadaMin, de uma jornada do veículo iniciada antes
 // da meia-noite. A partir de horaCorte vale a data do calendário.
 //
-// Depende de PapaParse e de _validarCSV (main.js).
+// Depende de PapaParse e de _validarCSV (DataNormalizer.js).
 // ============================================================
 
 const PaxCorte = {

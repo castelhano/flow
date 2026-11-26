@@ -54,56 +54,6 @@ function _normGps(row) {
 
 
 // ----------------------------------------------------------
-// Validação básica do CSV — lê a primeira linha de dados
-// e verifica se os campos esperados estão nas colunas certas.
-// Lança Error com mensagem amigável se inválido.
-// ----------------------------------------------------------
-function _validarCSV(rawData, tipo) {
-    if (!rawData || rawData.length === 0) {
-        throw new Error("Arquivo vazio ou sem registros de dados.");
-    }
-
-    const cfg   = tipo === "gps" ? APP_CONFIG.fontes.gps : APP_CONFIG.fontes.bilhetagem;
-    const label = tipo === "gps" ? "GPS" : "bilhetagem";
-    const row   = rawData[0];
-
-    for (const [field, def] of Object.entries(cfg.colunas)) {
-        if (typeof def !== "object" || !def.regex) continue;
-
-        const idx = DataNormalizer._letraParaIndice(def.coluna);
-        const val = String(row[idx] ?? "").trim();
-
-        if (!def.regex.test(val)) {
-            throw new Error(
-                `Arquivo de ${label} inválido.\n` +
-                `Campo "${field}" (coluna ${def.coluna}) — esperado: ${def.descricao}\n` +
-                `Encontrado: "${val.substring(0, 60) || "(vazio)"}"`
-            );
-        }
-    }
-
-    // Detecta arquivo trocado: se o arquivo também passa o schema do OUTRO tipo,
-    // o usuário provavelmente selecionou o arquivo errado.
-    const outroTipo  = tipo === "gps" ? "bilhetagem" : "gps";
-    const outroCfg   = outroTipo === "gps" ? APP_CONFIG.fontes.gps : APP_CONFIG.fontes.bilhetagem;
-    const outroLabel = outroTipo === "gps" ? "GPS" : "bilhetagem";
-    const passaOutro = Object.entries(outroCfg.colunas).every(([, def]) => {
-        if (typeof def !== "object" || !def.regex) return true;
-        const idx = DataNormalizer._letraParaIndice(def.coluna);
-        const val = String(row[idx] ?? "").trim();
-        return def.regex.test(val);
-    });
-    console.log(`[DEBUG _validarCSV] ${label} passou na validação. passaOutro (${outroLabel}):`, passaOutro);
-    if (passaOutro) {
-        throw new Error(
-            `Arquivo de ${label} inválido: o arquivo selecionado parece ser o de ${outroLabel}.\n` +
-            `Verifique se carregou o arquivo correto.`
-        );
-    }
-}
-
-
-// ----------------------------------------------------------
 // Carregamento de arquivos
 // Chamado pelo evento onchange dos inputs de arquivo
 // ----------------------------------------------------------
@@ -170,7 +120,7 @@ async function handleFileSelect(tipo, file) {
 // _usarGpsCittati: recebe a resposta do serviço (ou o mesmo JSON salvo
 //   em arquivo) e passa a usá-la como GPS. Lança Error se inválida.
 // buscarGpsCittati: consulta o serviço para o dia escolhido na tela.
-// listarDiasCittati: preenche a lista de dias disponíveis no BI.
+// verificarServicoCittati: data padrão (ontem) e situação do serviço.
 // ----------------------------------------------------------
 function _usarGpsCittati(resposta, origem) {
     const linhas = Cittati.paraGps(resposta);   // valida e converte
@@ -204,8 +154,18 @@ async function buscarGpsCittati() {
             "success"
         );
     } catch (err) {
-        UIController.setStatusBadge("Erro ao buscar a Cittati.", "danger");
-        alert(`Erro: ${err.message}`);
+        // Dia sem dados: a mensagem do serviço fala do "dia de hoje"; para
+        // dia antigo é só não haver dados
+        if (err.codigo === "dia_sem_dados") {
+            const ontem = document.getElementById("cittati-dia")?.max || "";
+            UIController.setStatusBadge("Dia sem dados na Cittati.", "warning");
+            alert(data >= ontem
+                ? `Ainda não há dados da Cittati de ${Cittati.isoParaBR(data)}.\n\nO BI atualiza de madrugada: o dia de ontem costuma entrar por volta das 05:00.`
+                : `Não há viagens da Cittati em ${Cittati.isoParaBR(data)}.`);
+        } else {
+            UIController.setStatusBadge("Erro ao buscar a Cittati.", "danger");
+            alert(`Erro: ${err.message}`);
+        }
     } finally {
         UIController.hideLoader();
         AppState.loading.gps = false;
@@ -213,25 +173,31 @@ async function buscarGpsCittati() {
     }
 }
 
-async function listarDiasCittati() {
-    const select = document.getElementById("cittati-dia");
-    const info   = document.getElementById("cittati-info");
-    const botao  = document.getElementById("btn-cittati-buscar");
-    if (!select) return;
+// Campo de data: ontem por padrão (o BI só traz até ontem). Dia sem dados
+// volta do serviço como erro "dia_sem_dados", com mensagem própria.
+// Aqui só confere se o serviço está no ar, para avisar antes do Buscar.
+async function verificarServicoCittati() {
+    const campo = document.getElementById("cittati-dia");
+    const info  = document.getElementById("cittati-info");
+    if (!campo) return;
+    const ontem = new Date();
+    ontem.setDate(ontem.getDate() - 1);
+    const iso = [ontem.getFullYear(), String(ontem.getMonth() + 1).padStart(2, "0"), String(ontem.getDate()).padStart(2, "0")].join("-");
+    campo.max = iso;
+    if (!campo.value) campo.value = iso;
+
     try {
-        const dias = await Cittati.dias();
-        select.innerHTML = dias.slice().reverse()
-            .map(d => `<option value="${d}">${Cittati.isoParaBR(d)}</option>`).join("");
-        select.disabled = botao.disabled = dias.length === 0;
-        if (info) info.innerText = dias.length ? "dias disponíveis no BI" : "BI sem dias disponíveis";
+        const s = await Cittati.saude();
+        const quando = s.biAtualizadoEm
+            ? new Date(s.biAtualizadoEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })
+            : "?";
+        info.innerText = s.ok ? `BI atualizado em ${quando}` : "serviço no ar, mas o BI não respondeu";
+        info.title     = s.ok ? "" : (s.erro || "");
     } catch (err) {
-        select.innerHTML = "<option value=''>serviço indisponível</option>";
-        select.disabled = botao.disabled = true;
-        if (info) {
-            info.innerText = "serviço indisponível — dá para carregar o .json no card de GPS";
-            info.title = err.message;
-        }
+        info.innerText = "serviço indisponível — use \"Arquivo\" com o .json da Cittati";
+        info.title     = err.message;
     }
+    info.dataset.original = info.innerText;
 }
 
 
@@ -494,10 +460,13 @@ document.addEventListener("DOMContentLoaded", () => {
     UIController.initFiltros();
     UIController.initSelectAll();
 
-    // GPS Cittati: lista de dias do serviço
+    // GPS: fonte escolhida da última vez (Cittati ou arquivo)
+    UIController.modoGps(localStorage.getItem("pax.modoGps") || "cittati");
     document.getElementById("btn-cittati-buscar")
         ?.addEventListener("click", buscarGpsCittati);
-    listarDiasCittati();
+    document.getElementById("cittati-dia")
+        ?.addEventListener("keydown", e => { if (e.key === "Enter") buscarGpsCittati(); });
+    verificarServicoCittati();
 
     // Botões principais
     document.getElementById("btn-processar")

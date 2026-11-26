@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Revisão GPS Cittati</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../static/css/app.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<style>
+/* ============================================================
+   Revisão GPS Cittati — página dos operadores
+============================================================ */
+.rv-abas { display: flex; gap: 8px; }
+.rv-abas button {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .04em;
+    padding: 8px 16px; border-radius: var(--radius); cursor: pointer;
+    background: var(--bg-3); color: var(--text-2); border: 1px solid var(--border);
+}
+.rv-abas button.ativo { background: var(--accent); color: white; border-color: var(--accent); }
+
+.rv-painel {
+    display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap;
+    background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 16px 18px;
+}
+.rv-painel .filter-group select, .rv-painel .filter-group input { height: 34px; min-width: 200px; }
+.rv-painel input[type=date] { color-scheme: dark; min-width: 150px !important; }
+.rv-painel .btn { height: 34px; }
+.rv-painel .rv-info { font-size: 12px; color: var(--text-3); font-family: var(--mono); align-self: center; }
+.rv-arquivo { height: 34px; cursor: pointer; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; letter-spacing: 0; }
+.rv-arquivo.rv-carregado { border-color: var(--success); color: var(--success); }
+.rv-link { font-size: 12px; color: var(--text-3); text-decoration: underline; cursor: pointer; align-self: center; }
+.rv-link:hover { color: var(--accent); }
+
+.rv-lembrete {
+    font-size: 13px; color: var(--text-2); line-height: 1.5;
+    border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius);
+    background: var(--bg-2); padding: 10px 14px;
+}
+
+.rv-barra {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    font-size: 13px; color: var(--text-2);
+}
+.rv-barra > div:first-child { flex: 1; min-width: 280px; }
+.rv-progresso { width: 160px; height: 6px; background: var(--bg-4); border-radius: 3px; overflow: hidden; }
+.rv-progresso-fill { height: 100%; background: var(--success); }
+
+.rv-grupos { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.rv-grupo {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; cursor: pointer;
+    background: var(--bg-2); border: 1px solid var(--border); border-left: 3px solid var(--cor);
+    border-radius: var(--radius); padding: 12px 14px; color: var(--text);
+}
+.rv-grupo:hover:not(:disabled) { border-color: var(--border-hi); border-left-color: var(--cor); }
+.rv-grupo.ativo { background: var(--bg-3); border-color: var(--cor); }
+.rv-grupo:disabled { opacity: .45; cursor: default; }
+.rv-grupo-n { font-family: var(--mono); font-size: 22px; color: var(--cor); line-height: 1.1; }
+.rv-grupo-t { font-size: 13px; }
+.rv-grupo-p { font-size: 11px; color: var(--text-3); font-family: var(--mono); }
+
+.rv-acao {
+    font-size: 13px; color: var(--text-2); line-height: 1.5;
+    background: var(--bg-2); border: 1px solid var(--border); border-left: 3px solid; border-radius: var(--radius);
+    padding: 10px 14px;
+}
+
+.rv-tabela { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rv-tabela th {
+    text-align: left; font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--text-3); padding: 8px 10px; background: var(--bg-3);
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.rv-tabela td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; white-space: normal; }
+#rv-resultado .table-wrap, #rv-conferencia .table-wrap { max-height: none; }
+.rv-tabela td.mono { font-family: var(--mono); white-space: nowrap; }
+.rv-tabela tr.rv-marcado td { opacity: .45; }
+.rv-tabela tr.rv-marcado td.rv-botoes { opacity: 1; }
+.rv-botoes { white-space: nowrap; text-align: right; }
+.rv-marca { height: 26px; font-size: 11px; padding: 0 10px; margin-left: 4px; }
+.rv-botoes-col { display: flex; flex-direction: column; gap: 4px; }
+.rv-botoes-col .rv-marca { margin-left: 0; justify-content: center; white-space: nowrap; }
+.rv-tag { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+.rv-fraco { color: var(--text-3); }
+
+.rv-aviso {
+    font-size: 13px; color: var(--text-2); line-height: 1.5;
+    border: 1px solid var(--warning); background: var(--warning-dim); border-radius: var(--radius); padding: 10px 14px;
+}
+.rv-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.rv-chip {
+    font-family: var(--mono); font-size: 12px; cursor: pointer; padding: 6px 12px; border-radius: var(--radius);
+    background: var(--bg-2); color: var(--text-2); border: 1px solid var(--border);
+}
+.rv-chip b { color: var(--cor); }
+.rv-chip.ativo { border-color: var(--cor); background: var(--bg-3); }
+
+.rv-vazio { color: var(--text-3); font-size: 14px; padding: 24px 0; text-align: center; }
+.rv-ajuda { font-size: 12px; color: var(--text-3); line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<header id="topbar">
+    <div class="topbar-left">
+        <a href="../dashboard.html" class="btn btn-ghost">
+            <i data-lucide="arrow-left"></i> Voltar
+        </a>
+        <div class="logo">
+            <div class="logo-icon"><i data-lucide="list-checks"></i></div>
+            REVISÃO <span class="logo-sub">GPS CITTATI</span>
+        </div>
+    </div>
+    <div id="topbar-right">
+        <div class="rv-abas">
+            <button data-rv-aba="revisar" class="ativo" onclick="Revisao._aba('revisar')">Revisar o dia</button>
+            <button data-rv-aba="conferir" onclick="Revisao._aba('conferir')">Conferir pendências</button>
+        </div>
+    </div>
+</header>
+
+<div id="app">
+
+    <div id="rv-lembrete" class="rv-lembrete hidden"></div>
+
+    <!-- Revisar o dia -->
+    <section id="rv-painel-revisar" class="rv-painel">
+        <div class="filter-group">
+            <label>Empresa</label>
+            <select id="rv-empresa"></select>
+        </div>
+        <div class="filter-group">
+            <label>Dia</label>
+            <input type="date" id="rv-dia">
+        </div>
+        <div class="filter-group">
+            <label>Bilhetagem</label>
+            <label class="btn btn-ghost rv-arquivo" title="Arquivos .csv da bilhetagem do dia (pode ser mais de um período)">
+                <i data-lucide="users"></i> <span id="rv-pax-nome">escolher arquivo(s)</span>
+                <input type="file" id="rv-pax" accept=".csv" multiple class="hidden">
+            </label>
+        </div>
+        <span id="rv-pax-limpar" class="rv-link hidden">limpar</span>
+        <button id="rv-analisar" class="btn btn-primary"><i data-lucide="search"></i> Analisar</button>
+        <span id="rv-servico" class="rv-info">consultando o serviço...</span>
+        <label class="rv-link" title="Se o serviço estiver fora: abrir o .json da Cittati salvo por outra pessoa">
+            abrir arquivo<input type="file" id="rv-json" accept=".json" class="hidden">
+        </label>
+    </section>
+
+    <!-- Conferir pendências -->
+    <section id="rv-painel-conferir" class="rv-painel hidden">
+        <label class="btn btn-primary" style="cursor:pointer;">
+            <i data-lucide="folder-open"></i> Abrir arquivo de pendências
+            <input type="file" id="rv-pend" accept=".json" class="hidden">
+        </label>
+        <span class="rv-ajuda">
+            O arquivo salvo em "Revisar o dia". A Cittati só mostra as correções depois da atualização do BI, de madrugada:
+            confira no dia seguinte ao das correções.
+        </span>
+    </section>
+
+    <div id="rv-resultado" style="display:flex; flex-direction:column; gap:14px;">
+        <div class="rv-ajuda">
+            Escolha a empresa e o dia, carregue a bilhetagem do dia e clique em <b>Analisar</b>. Aparecem as viagens que
+            precisam ser revistas na Cittati,
+            separadas pelo que é preciso fazer. Marque cada uma como <b>Corrigi</b> ou <b>Está certo</b> e, no fim,
+            <b>Salve as pendências</b> para conferir depois.
+        </div>
+    </div>
+
+    <div id="rv-conferencia" class="hidden" style="display:flex; flex-direction:column; gap:14px;"></div>
+
+</div>
+
+<div id="loader" class="hidden">
+    <div class="spinner"></div>
+    <p>Carregando...</p>
+</div>
+
+<script src="vendor/papaparse.min.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/Cittati.js"></script>
+<script src="js/DataNormalizer.js"></script>
+<script src="js/PaxCorte.js"></script>
+<script src="js/Engine.js"></script>
+<script src="js/modules/CittatiAnalises.js"></script>
+<script src="js/modules/Anomalies.js"></script>
+<script src="js/modules/Pendencias.js"></script>
+<script src="js/revisao/Revisao.js"></script>
+<script>
+lucide.createIcons();
+Revisao.iniciar();
+</script>
+
+</body>
+</html>
