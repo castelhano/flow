@@ -91,6 +91,8 @@ Lista os dias que existem no BI. O `pax_consolidar` usa para montar a escolha de
 
 É uma consulta pequena, só com a coluna `Data_Sem_Hora` (ver [Consultar](#consultar)). Guarde em cache até a próxima atualização do BI.
 
+**Exceção à regra de não converter:** o BI devolve `DD/MM/AAAA`; aqui as datas saem como `AAAA-MM-DD`, sem repetições e em ordem crescente. Valores que não forem uma data válida são ignorados.
+
 ### `GET /viagens?data=AAAA-MM-DD`
 
 Todas as viagens do **dia operacional**, de todas as empresas, uma linha por viagem. O cliente filtra a empresa.
@@ -109,7 +111,8 @@ Todas as viagens do **dia operacional**, de todas as empresas, uma linha por via
 }
 ```
 
-- Os valores saem **como o BI devolve**, já decodificados: texto continua texto, número continua número, ausente é `null`. Não converter datas, não traduzir `Sim`/`Não`, não aparar espaços.
+- Os valores saem **como o BI devolve**, já decodificados: texto continua texto, número continua número, ausente é `null`. Não converter datas (`Data_Sem_Hora` sai `25/11/2026`), não traduzir `Sim`/`Não`, não aparar espaços. Só o `data` do topo da resposta vem em `AAAA-MM-DD`, repetindo o que foi pedido.
+- `data` precisa ser `AAAA-MM-DD` **e** uma data real (`2026-02-30` dá 400 `data_invalida`).
 - `geradoEm` é a hora em que o serviço consultou o BI para montar aquele cache.
 - Comprimir com gzip quando o cliente aceitar (`Accept-Encoding`). Um dia inteiro dá ~6,5 MB de JSON e ~310 KB comprimido. Pode ser no Python ou no nginx (`gzip on; gzip_types application/json;`).
 
@@ -145,10 +148,12 @@ tempoViagemPrevisto tempoViagemRealizado
 
 Um arquivo por dia em `/var/lib/flow-api/cittati/AAAA-MM-DD.json` (ou `.json.gz`), guardando a resposta de `/viagens` e o `biAtualizadoEm` da consulta.
 
-- **Quando consultar o BI de novo:** só quando o BI tiver sido atualizado depois do cache daquele dia. O BI atualiza uma vez por dia, de madrugada. Sem atualização nova, responda do cache com `"doCache": true`.
+- **Só grave resposta de sucesso:** `total > 0`, sem coluna faltando e sem `idResumoViagem` repetido. Nenhum erro (404, 502, 504) vai para o cache. Assim o dia de hoje continua dando 404 até a atualização em que ele entra no BI, e a partir daí é consultado normalmente.
+- **Quando consultar o BI de novo:** quando o `LastRunTime` atual do plano de atualização for **diferente** do `biAtualizadoEm` guardado no cache daquele dia, incluindo quando o guardado é `null`. Compare por igualdade, não por "depois": não se sabe se o `LastRunTime` marca o início ou o fim da atualização. Com "depois", um cache montado no meio de uma atualização nunca seria refeito. Se for igual, responda do cache com `"doCache": true`. A mesma regra vale para o cache de `/dias`.
   - Fique de olho nisso: o operador corrige uma viagem na Cittati num dia e confere no dia seguinte, depois da atualização. O cache **não pode** esconder essa correção.
-- Para saber a hora da última atualização, consulte o plano de atualização no máximo **a cada 10 minutos** e guarde em memória.
-- **Uma consulta ao BI por vez** (um lock). Se dois pedidos chegarem para o mesmo dia sem cache, o segundo espera o primeiro e usa o resultado. A conta é única e compartilhada com a operação, e o limite de uso do BI é desconhecido.
+  - Uma consulta a mais quando o `LastRunTime` muda sem os dados mudarem (ex.: atualização que falhou) é aceitável.
+- Para saber a hora da última atualização, consulte o plano de atualização no máximo **uma vez a cada 10 minutos**, contados da **última tentativa, com sucesso ou não**. Guarde em memória o valor e a hora da tentativa. Essa consulta é leve e fica **fora** do lock abaixo; se duas coincidirem, tudo bem. Se ela falhar, use o último valor conhecido. Se nunca houve um, sirva o cache quando ele existir e consulte o BI quando não existir (com `biAtualizadoEm: null`, que será refeito quando o plano voltar a responder).
+- **Uma consulta `querydata` por vez** (um lock só para ela). Se dois pedidos chegarem para o mesmo dia sem cache, o segundo espera o primeiro e usa o resultado. A conta é única e compartilhada com a operação, e o limite de uso do BI é desconhecido.
 - `?atualizar=1` ignora o cache daquele dia (para diagnóstico).
 - Apague arquivos com mais de **90 dias** (pode ser na subida do serviço ou uma vez por dia).
 - Opcional: depois de detectar uma atualização nova do BI, refazer o cache dos últimos 7 dias em segundo plano, com intervalo entre as consultas. Não é necessário na primeira versão.
@@ -206,7 +211,7 @@ Corpo da consulta. Troque `<SELECT>`, `<PROJ>` e a data:
 
 - `<SELECT>`: um item por coluna, `{ "Column": { "Expression": { "SourceRef": { "Source": "f" } }, "Property": "<coluna>" }, "Name": "<coluna>" }`.
 - `<PROJ>`: os índices `[0, 1, …, n-1]`.
-- O filtro é **`Data_Sem_Hora`**, um texto `DD/MM/AAAA` entre aspas simples dentro da string. Ele é o dia operacional: as viagens de 25/11 vão até ~03:30 de 26/11. Não filtre pela coluna `Data` nem pelos horários.
+- O filtro é **`Data_Sem_Hora`**, um texto `DD/MM/AAAA` entre aspas simples dentro da string. Converta a `data` pedida: `2026-11-25` vira `"Value": "'25/11/2026'"`. Ele é o dia operacional: as viagens de 25/11 vão até ~03:30 de 26/11. Não filtre pela coluna `Data` nem pelos horários.
 - **Para `/dias`:** só a coluna `Data_Sem_Hora`, sem `Where`. A resposta vem agrupada: uma linha por dia distinto.
 
 ### Decodificar
