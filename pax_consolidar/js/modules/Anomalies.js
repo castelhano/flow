@@ -494,6 +494,24 @@ const Anomalies = {
             `;
         }
 
+        // Cittati: as correções só aparecem no BI no dia seguinte — salva as
+        // pendências para conferir depois (Pendencias.js)
+        if (AppState.session?.viagens.some(v => v.cittati)) {
+            const total = abas.reduce((s, a) => s + a.n, 0);
+            html = `
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;
+                            background:var(--bg-2); border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-bottom:16px;">
+                    <span style="font-size:0.8rem; color:var(--text-3); line-height:1.5;">
+                        As correções feitas na Cittati só aparecem no BI depois da próxima atualização. Salve as pendências
+                        e confira num outro dia pelo card <b>Conferir pendências</b>. Entram todos os itens das abas
+                        (os filtros não contam); card de omissão ignorado fica de fora.
+                    </span>
+                    <button onclick="Pendencias.salvarDaAnalise()" class="btn btn-primary" ${total ? "" : "disabled"}
+                        style="font-size:0.8rem; height:32px; white-space:nowrap;">Salvar pendências</button>
+                </div>
+                ${html}`;
+        }
+
         const el = document.getElementById('anomalies-resultados');
         if (el) el.innerHTML = html;
     },

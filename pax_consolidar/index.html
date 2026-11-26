@@ -434,6 +434,14 @@
                 <span class="file-name hidden" id="pax-limpar" title="Remover arquivos de bilhetagem" style="cursor:pointer; text-decoration:underline;">limpar</span>
             </div>
 
+            <!-- Pendências Cittati (salvas na análise de anomalias) -->
+            <div class="drop-zone" id="drop-pendencias">
+                <input type="file" id="input-pendencias" class="hidden" accept=".json">
+                <i data-lucide="list-checks"></i>
+                <strong>Conferir pendências</strong>
+                <p>.json — pendências Cittati salvas</p>
+            </div>
+
             <!-- Importar trabalho -->
             <div class="drop-zone" id="drop-json">
                 <input type="file" id="input-json" class="hidden" accept=".json">
@@ -833,6 +841,7 @@
 <script src="js/main.js"></script>
 <script src="js/modules/CittatiAnalises.js"></script>
 <script src="js/modules/Anomalies.js"></script>
+<script src="js/modules/Pendencias.js"></script>
 
 <script>
 // Inicializa ícones Lucide
@@ -902,6 +911,20 @@ setupDropZone('drop-json', 'input-json',  null);
 document.getElementById('input-json').addEventListener('change', e => {
     Storage.importJSON(e.target.files[0]);
 });
+
+// Pendências: não usa setupDropZone (o card não fica "carregado"; dá para
+// abrir o mesmo arquivo de novo depois)
+(function setupDropZonePendencias() {
+    const card  = document.getElementById('drop-pendencias');
+    const input = document.getElementById('input-pendencias');
+    card.addEventListener('click', () => input.click());
+    input.addEventListener('click', e => e.stopPropagation());
+    input.addEventListener('change', e => {
+        const file = e.target.files[0];
+        input.value = '';
+        if (file) Pendencias.abrirArquivo(file);
+    });
+})();
 
 const _dropOD    = document.getElementById('drop-oferta-demanda');
 const _inputOD   = document.getElementById('input-oferta-demanda');
