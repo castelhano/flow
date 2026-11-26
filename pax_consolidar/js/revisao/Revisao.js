@@ -43,6 +43,16 @@ const Revisao = {
           acao: "A viagem foi encerrada num ponto diferente do final normal da rota. Confirme se foi isso mesmo." }
     ],
 
+    // Regras: não dá para dispensar com "está certo". O operador pode
+    // concluir que a viagem não rodou (omissão com passageiros, pela metade,
+    // "#" sem sinal...), mas a omissão continua precisando de motivo e a
+    // realizada continua não podendo ter. Só saem quando a Cittati estiver certa.
+    REGRAS: new Set(["omissao_sem_motivo", "realizada_com_motivo"]),
+    FALTA: {
+        omissao_sem_motivo:   "falta lançar o motivo da omissão",
+        realizada_com_motivo: "falta retirar o motivo"
+    },
+
     SITUACOES: {
         pendente:       { label: "Continua igual",            cor: "var(--danger)" },
         alterada:       { label: "Mudou — confira",           cor: "var(--warning)" },
@@ -359,16 +369,23 @@ const Revisao = {
             <button class="btn ${marca === tipo ? (tipo === "corrigido" ? "btn-success" : "btn-primary") : "btn-ghost"} rv-marca"
                 onclick="Revisao._marcar('${c.id}', '${tipo}')">${texto}</button>`;
 
+        // "Está certo" só para o que é julgamento; com ele, a regra que
+        // sobrar continua valendo e a linha diz o que falta
+        const podeDispensar = c.itens.some(x => !this.REGRAS.has(x.tipo));
+        const falta = marca === "certo" ? this._falta(c) : [];
+        const avisoFalta = falta.length
+            ? `<div class="rv-tag" style="color:var(--warning)">não rodou, mas ${falta.join("; ")}</div>` : "";
+
         return `
-            <tr class="${marca ? "rv-marcado" : ""}">
+            <tr class="${marca && !falta.length ? "rv-marcado" : ""}">
                 <td><b>${this._esc(v.linha_base)}</b> ${this._esc(this._sentido(v.sentido, ct.rota))}
                     ${outros.length ? `<div class="rv-tag">também: ${outros.map(t => this._esc(t.toLowerCase())).join(", ")}</div>` : ""}</td>
                 <td class="mono">${this._esc(v.tabela)}</td>
                 <td class="mono">${this._esc(v.veiculo) || "—"}</td>
                 <td class="mono">${h(ct.prevInicio)} → ${h(ct.prevFim)}</td>
                 <td>${this._registro(ct, c.itens.find(x => x.tipo === "ida_quebrada"))}${this._carros(c)}</td>
-                <td>${ct.motivo ? this._esc(ct.motivo) : `<span class="rv-fraco">sem motivo</span>`}</td>
-                <td class="rv-botoes"><div class="rv-botoes-col">${botao("corrigido", "Corrigi")}${botao("certo", "Está certo")}</div></td>
+                <td>${ct.motivo ? this._esc(ct.motivo) : `<span class="rv-fraco">sem motivo</span>`}${avisoFalta}</td>
+                <td class="rv-botoes"><div class="rv-botoes-col">${botao("corrigido", "Corrigi")}${podeDispensar ? botao("certo", "Está certo") : ""}</div></td>
             </tr>`;
     },
 
@@ -396,6 +413,11 @@ const Revisao = {
         return txt;
     },
 
+    // Regras ainda não atendidas num caso (texto do que falta)
+    _falta(c) {
+        return [...new Set(c.itens.filter(x => this.REGRAS.has(x.tipo)).map(x => this.FALTA[x.tipo]))];
+    },
+
     // Omissão com passageiros: carros que tiveram passageiros no horário
     _carros(c) {
         const x = c.itens.find(i => i.tipo === "omissao_com_pax");
@@ -419,16 +441,17 @@ const Revisao = {
         window.scrollTo(0, y);
     },
 
-    // Entra tudo que não foi marcado "está certo". "Corrigi" vai junto para
-    // ser conferido depois da atualização do BI.
+    // Entra tudo, menos o que foi dispensado com "está certo" (que nunca
+    // dispensa as regras: elas vão com marcação "certo"). "Corrigi" vai
+    // junto para ser conferido depois da atualização do BI.
     async salvarPendencias() {
         const itens = [];
         let corrigidos = 0;
         for (const c of this.casos) {
             const marca = this.marcas[c.id];
-            if (marca === "certo") continue;
             if (marca === "corrigido") corrigidos++;
             for (const x of c.itens) {
+                if (marca === "certo" && !this.REGRAS.has(x.tipo)) continue;
                 const it = Pendencias._item(x.tipo, c.viagem, {
                     parte: x.parte || null, parId: x.par ? x.par.cittati.id : null, marcacao: marca || null,
                     ...(x.carros ? { carros: x.carros, total: x.total } : {})
@@ -552,8 +575,12 @@ const Revisao = {
         const r = g.r, it = r.item, a = r.agora, ret = a || it.antes;
         const sit = this.SITUACOES[g.situacao];
         const h = s => Cittati._hora(s) || "—";
-        const fora = g.indices.every(i => this.conf.excluidos.has(i));
+        const disp = this._dispensaveis(g);
+        const fora = disp.length > 0 && disp.every(i => this.conf.excluidos.has(i));
         const tipos = [...new Set(g.resultados.map(x => this.GRUPOS.find(gr => gr.tipos.includes(x.item.tipo))?.titulo).filter(Boolean))];
+        const regraAberta = g.resultados.filter(x => this.REGRAS.has(x.item.tipo) && x.situacao !== "resolvida");
+        const certoMasFalta = regraAberta.length && (it.marcacao === "certo" || fora)
+            ? `<div class="rv-tag" style="color:var(--warning)">não rodou, mas ${[...new Set(regraAberta.map(x => this.FALTA[x.item.tipo]))].join("; ")}</div>` : "";
         const mud = [...new Set(g.resultados.flatMap(x => [...x.mudancas, ...x.novos.map(t => `agora: ${CittatiAnalises.TIPOS[t] || t}`)]))];
         const marcou = it.marcacao === "corrigido" && g.situacao === "pendente"
             ? `<div class="rv-tag" style="color:var(--warning)">marcada como corrigida, mas ainda não aparece no BI</div>` : "";
@@ -563,15 +590,15 @@ const Revisao = {
             : "—";
 
         return `
-            <tr class="${fora ? "rv-marcado" : ""}">
-                <td style="color:${sit.cor}; white-space:nowrap;">${sit.label}${marcou}</td>
+            <tr class="${fora && !regraAberta.length ? "rv-marcado" : ""}">
+                <td style="color:${sit.cor}; white-space:nowrap;">${sit.label}${marcou}${certoMasFalta}</td>
                 <td>${tipos.map(t => this._esc(t)).join("<br>")}${mud.length ? `<div class="rv-tag">${mud.map(m => this._esc(m)).join("<br>")}</div>` : ""}</td>
                 <td><b>${this._esc(it.chave.linha_base)}</b> ${this._esc(this._sentido(it.chave.sentido, ret.rota))}</td>
                 <td class="mono">${this._esc(it.chave.tabela)}</td>
                 <td class="mono">${this._esc(ret.veiculo) || "—"}</td>
                 <td class="mono">${h(it.antes.prevInicio)} → ${h(it.antes.prevFim)}</td>
                 <td>${agora}</td>
-                <td class="rv-botoes">${g.situacao === "resolvida" ? "" : `
+                <td class="rv-botoes">${!disp.length ? "" : `
                     <button class="btn ${fora ? "btn-primary" : "btn-ghost"} rv-marca" onclick="Revisao._excluirConf('${g.k}')"
                         title="Conferido, não precisa corrigir: não vai para o arquivo do que falta">Está certo</button>`}</td>
             </tr>`;
@@ -582,10 +609,18 @@ const Revisao = {
         this._renderConferencia();
     },
 
+    // Itens da viagem que o "está certo" pode tirar do arquivo do que falta:
+    // os de julgamento ainda abertos (regras nunca)
+    _dispensaveis(g) {
+        return g.indices.filter((i, n) =>
+            !this.REGRAS.has(g.resultados[n].item.tipo) && g.resultados[n].situacao !== "resolvida");
+    },
+
     _excluirConf(k) {
         const g = this.conf.viagens.find(v => v.k === k);
-        const fora = g.indices.every(i => this.conf.excluidos.has(i));
-        g.indices.forEach(i => fora ? this.conf.excluidos.delete(i) : this.conf.excluidos.add(i));
+        const disp = this._dispensaveis(g);
+        const fora = disp.every(i => this.conf.excluidos.has(i));
+        disp.forEach(i => fora ? this.conf.excluidos.delete(i) : this.conf.excluidos.add(i));
         const y = window.scrollY;
         this._renderConferencia();
         window.scrollTo(0, y);
