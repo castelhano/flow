@@ -1,0 +1,29 @@
+[Unit]
+Description=flow-api — serviço Cittati BI (docs/cittati_bi_servico.md)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=flow-api
+Group=flow-api
+EnvironmentFile=/etc/flow-api/.env
+ExecStart=/usr/bin/python3 -I -u /opt/flow-api/server.py
+Restart=always
+RestartSec=5
+
+# Cria /var/lib/flow-api com dono flow-api
+StateDirectory=flow-api
+Environment=FLOW_API_CACHE=/var/lib/flow-api/cittati
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

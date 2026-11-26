@@ -1,0 +1,42 @@
+# Site da máquina rafaelplan: http → https, TLS e o download da CA local.
+# Cada aplicação tem os seus arquivos em /etc/nginx/rafaelplan.d/:
+#   <app>.http.conf    nível http (upstream, map)
+#   <app>.server.conf  dentro do server 443 (locations)
+# Para um serviço novo, basta acrescentar um <app>.server.conf.
+#
+# Instalado por flow_api/install.sh (repositório flow). Na migração, o
+# conteúdo do antigo sites-available/nyx foi repartido sem mudança entre
+# este arquivo e rafaelplan.d/nyx.*.conf.
+
+include /etc/nginx/rafaelplan.d/*.http.conf;
+
+# HTTP: só entrega o certificado da CA local (para instalar nos clientes) e redireciona o resto
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    location = /nyx-ca.crt {
+        alias /etc/nyx-tls/nyx-local-ca.crt;
+        default_type application/x-x509-ca-cert;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl default_server;
+    listen [::]:443 ssl default_server;
+    http2 on;
+    server_name _;
+
+    ssl_certificate     /etc/nyx-tls/server.crt;
+    ssl_certificate_key /etc/nyx-tls/server.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_session_cache   shared:nyx_ssl:10m;
+    ssl_session_timeout 1d;
+
+    include /etc/nginx/rafaelplan.d/*.server.conf;
+}
