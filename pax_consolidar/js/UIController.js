@@ -76,6 +76,34 @@ const UIController = {
 
 
     // ==========================================================
+    // GPS CARREGADO
+    // Duas entradas de GPS: card "Arquivo GPS" (CSV Sonda ou JSON Cittati)
+    // e card "GPS Cittati" (serviço). Marca a que foi usada e limpa a outra.
+    // card: "gps" | "cittati"
+    // ==========================================================
+
+    marcarGpsCarregado(card, texto) {
+        const gps  = document.getElementById("drop-gps");
+        const cit  = document.getElementById("drop-cittati");
+        const info = document.getElementById("cittati-info");
+        if (info && info.dataset.original === undefined) info.dataset.original = info.innerText;
+        if (gps && gps.dataset.original === undefined) gps.dataset.original = gps.querySelector("p").innerText;
+
+        if (card === "cittati") {
+            cit?.classList.add("loaded");
+            if (info) info.innerText = texto;
+            gps?.classList.remove("loaded");
+            if (gps) gps.querySelector("p").innerText = gps.dataset.original;
+        } else {
+            gps?.classList.add("loaded");
+            if (gps && texto) gps.querySelector("p").innerText = texto;
+            cit?.classList.remove("loaded");
+            if (info && info.dataset.original) info.innerText = info.dataset.original;
+        }
+    },
+
+
+    // ==========================================================
     // SELETOR DE EMPRESAS
     // ==========================================================
 
@@ -193,6 +221,16 @@ const UIController = {
         document.getElementById("stat-ignorados-pct").innerText  = pctIgnorados > 0 ? `${pctIgnorados}%` : "";
         document.getElementById("stat-total-trips").innerText    = r.totalViagens.toLocaleString();
         document.getElementById("stat-total-omissoes").innerText = r.omissoes.toLocaleString();
+
+        // Contadores do GPS Cittati (alertas que vêm do próprio BI)
+        const cit = r.cittati;
+        document.querySelectorAll(".so-cittati").forEach(el => el.classList.toggle("hidden", !cit));
+        if (cit) {
+            document.getElementById("stat-cit-sem-motivo").innerText = cit.omissaoSemMotivo.toLocaleString();
+            document.getElementById("stat-cit-com-motivo").innerText = cit.realizadaComMotivo.toLocaleString();
+            document.getElementById("stat-cit-parciais").innerText   = cit.parciais.toLocaleString();
+            document.getElementById("stat-cit-ponto").innerText      = cit.pontoAlterado.toLocaleString();
+        }
 
         const badgeExc = document.getElementById("badge-excecoes");
         if (badgeExc) badgeExc.innerText = `${r.naoAtribuidos.toLocaleString()} pendentes`;

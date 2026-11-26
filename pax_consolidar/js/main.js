@@ -30,10 +30,27 @@ const AppState = {
     paxDia:   null,
     paxCorte: null,
     session:  null,
+    // Fonte do GPS: "sonda" (CSV, linhas cruas) ou "cittati" (BI, linhas já
+    // normalizadas pelo Cittati.js). cittatiMeta: data e atualização do BI.
+    gpsFonte:    null,
+    cittatiMeta: null,
     // Flags de leitura em andamento — evita liberar "Processar"
     // enquanto um arquivo grande (ex: bilhetagem) ainda está sendo parseado.
     loading: { gps: false, pax: false }
 };
+
+
+// ----------------------------------------------------------
+// Linha de GPS normalizada, qualquer que seja a fonte.
+// Cittati já chega normalizada (Cittati.paraGps); Sonda passa pelo
+// DataNormalizer com o layout de colunas do settings.
+// ----------------------------------------------------------
+let _normalizadorSonda = null;
+function _normGps(row) {
+    if (AppState.gpsFonte === "cittati") return row;
+    _normalizadorSonda = _normalizadorSonda || new DataNormalizer(APP_CONFIG.fontes.gps);
+    return _normalizadorSonda.normalize(row);
+}
 
 
 // ----------------------------------------------------------
@@ -97,10 +114,17 @@ async function handleFileSelect(tipo, file) {
     try {
         UIController.setStatusBadge("Lendo arquivo...", "muted");
 
-        if (tipo === "gps") {
+        if (tipo === "gps" && /\.json$/i.test(file.name)) {
+            // JSON salvo do serviço Cittati (mesmo formato de /viagens)
+            const resposta = JSON.parse(await file.text());
+            _usarGpsCittati(resposta, file.name);
+        } else if (tipo === "gps") {
             const rawData = await Parser.readCSV(file);
             _validarCSV(rawData, "gps");
-            AppState.rawGps = rawData;
+            AppState.rawGps      = rawData;
+            AppState.gpsFonte    = "sonda";
+            AppState.cittatiMeta = null;
+            UIController.marcarGpsCarregado("gps", file.name);
         } else {
             // Bilhetagem pode ter vários arquivos e centenas de MB: aqui só valida
             // o layout. A leitura (recortada no dia do GPS) acontece no Processar.
@@ -142,6 +166,76 @@ async function handleFileSelect(tipo, file) {
 
 
 // ----------------------------------------------------------
+// GPS Cittati
+// _usarGpsCittati: recebe a resposta do serviço (ou o mesmo JSON salvo
+//   em arquivo) e passa a usá-la como GPS. Lança Error se inválida.
+// buscarGpsCittati: consulta o serviço para o dia escolhido na tela.
+// listarDiasCittati: preenche a lista de dias disponíveis no BI.
+// ----------------------------------------------------------
+function _usarGpsCittati(resposta, origem) {
+    const linhas = Cittati.paraGps(resposta);   // valida e converte
+    AppState.rawGps      = linhas;
+    AppState.gpsFonte    = "cittati";
+    AppState.cittatiMeta = {
+        data:           resposta.data,
+        biAtualizadoEm: resposta.biAtualizadoEm || null,
+        geradoEm:       resposta.geradoEm || null,
+        origem
+    };
+    const resumo = `${Cittati.isoParaBR(resposta.data)} — ${linhas.length.toLocaleString("pt-BR")} viagens`;
+    // Do serviço: marca o card Cittati. De arquivo: o card de GPS já mostra o nome.
+    UIController.marcarGpsCarregado(origem === "serviço" ? "cittati" : "gps",
+        origem === "serviço" ? resumo : `${origem} (${resumo})`);
+}
+
+async function buscarGpsCittati() {
+    const data = document.getElementById("cittati-dia")?.value;
+    if (!data) return alert("Escolha o dia.");
+
+    AppState.loading.gps = true;
+    UIController.atualizarFuncionalidadesDisponiveis();
+    UIController.showLoader(`Buscando viagens da Cittati de ${Cittati.isoParaBR(data)}...`);
+    try {
+        const resposta = await Cittati.viagensDoDia(data);
+        _usarGpsCittati(resposta, "serviço");
+        _avisarGpsSemRealizadas();
+        UIController.setStatusBadge(
+            AppState.paxFiles.length ? "Arquivos prontos!" : "GPS Cittati carregado. Bilhetagem é opcional.",
+            "success"
+        );
+    } catch (err) {
+        UIController.setStatusBadge("Erro ao buscar a Cittati.", "danger");
+        alert(`Erro: ${err.message}`);
+    } finally {
+        UIController.hideLoader();
+        AppState.loading.gps = false;
+        UIController.atualizarFuncionalidadesDisponiveis();
+    }
+}
+
+async function listarDiasCittati() {
+    const select = document.getElementById("cittati-dia");
+    const info   = document.getElementById("cittati-info");
+    const botao  = document.getElementById("btn-cittati-buscar");
+    if (!select) return;
+    try {
+        const dias = await Cittati.dias();
+        select.innerHTML = dias.slice().reverse()
+            .map(d => `<option value="${d}">${Cittati.isoParaBR(d)}</option>`).join("");
+        select.disabled = botao.disabled = dias.length === 0;
+        if (info) info.innerText = dias.length ? "dias disponíveis no BI" : "BI sem dias disponíveis";
+    } catch (err) {
+        select.innerHTML = "<option value=''>serviço indisponível</option>";
+        select.disabled = botao.disabled = true;
+        if (info) {
+            info.innerText = "serviço indisponível — dá para carregar o .json no card de GPS";
+            info.title = err.message;
+        }
+    }
+}
+
+
+// ----------------------------------------------------------
 // Remove os arquivos de bilhetagem carregados
 // ----------------------------------------------------------
 function limparBilhetagem() {
@@ -158,12 +252,11 @@ function limparBilhetagem() {
 // (ex: export de data futura — tudo "Não iniciado")
 // ----------------------------------------------------------
 function _avisarGpsSemRealizadas() {
-    const norm   = new DataNormalizer(APP_CONFIG.fontes.gps);
     const status = Object.values(APP_CONFIG.engine.status).filter(s => s.concilia).map(s => s.value);
     const linhas = AppState.rawGps || [];
-    const realizadas = linhas.filter(r => status.includes(String(norm.normalize(r).statusViagem))).length;
+    const realizadas = linhas.filter(r => status.includes(String(_normGps(r).statusViagem))).length;
     if (linhas.length > 0 && realizadas === 0) {
-        const data = norm.normalize(linhas[0]).data;
+        const data = _normGps(linhas[0]).data;
         alert(
             `GPS sem viagens realizadas.\n\n` +
             `Nenhuma das ${linhas.length} viagens de ${data} tem status ${status.join(" ou ")}. ` +
@@ -180,8 +273,7 @@ function _avisarGpsSemRealizadas() {
 async function _carregarPaxDoDia() {
     if (!AppState.paxFiles.length || !AppState.rawGps?.length) return;
 
-    const normGps = new DataNormalizer(APP_CONFIG.fontes.gps);
-    const dia     = normGps.normalize(AppState.rawGps[0]).data;
+    const dia     = _normGps(AppState.rawGps[0]).data;
     if (AppState.rawPax && AppState.paxDia === dia) return;
 
     AppState.rawPax = null;
@@ -239,11 +331,10 @@ async function detectarEmpresas() {
         return;
     }
 
-    const normGps = new DataNormalizer(APP_CONFIG.fontes.gps);
     const normPax = new DataNormalizer(APP_CONFIG.fontes.bilhetagem);
 
     const empresasGps = [
-        ...new Set(AppState.rawGps.map(r => normGps.normalize(r).empresa).filter(Boolean))
+        ...new Set(AppState.rawGps.map(r => _normGps(r).empresa).filter(Boolean))
     ].sort();
 
     const empresasPax = AppState.rawPax
@@ -252,7 +343,7 @@ async function detectarEmpresas() {
 
     console.log("[DEBUG detectarEmpresas] rawGps.length:", AppState.rawGps.length,
         "| rawPax.length:", AppState.rawPax ? AppState.rawPax.length : null);
-    console.log("[DEBUG detectarEmpresas] amostra normalizada GPS[0]:", normGps.normalize(AppState.rawGps[0]));
+    console.log("[DEBUG detectarEmpresas] amostra normalizada GPS[0]:", _normGps(AppState.rawGps[0]));
     if (AppState.rawPax) console.log("[DEBUG detectarEmpresas] amostra normalizada PAX[0]:", normPax.normalize(AppState.rawPax[0]));
     console.log("[DEBUG detectarEmpresas] empresasGps:", empresasGps);
     console.log("[DEBUG detectarEmpresas] empresasPax:", empresasPax);
@@ -275,7 +366,6 @@ function executarProcessamento({ empresasPax, empresasConciliacao }) {
     // setTimeout garante que o loader renderiza antes do processamento bloquear a thread
     setTimeout(() => {
         try {
-            const normGps = new DataNormalizer(APP_CONFIG.fontes.gps);
             const normPax = new DataNormalizer(APP_CONFIG.fontes.bilhetagem);
 
             // GPS: filtrado pelas empresas do corte (painel 1).
@@ -286,7 +376,7 @@ function executarProcessamento({ empresasPax, empresasConciliacao }) {
 
             const gpsLimpo = AppState.rawGps
                 .map(r => {
-                    const n = normGps.normalize(r);
+                    const n = { ..._normGps(r) };
                     if (!empresasPaxSet.has(n.empresa) && paxEmpNorm[n.empresa]) {
                         n.empresa = paxEmpNorm[n.empresa];
                     }
@@ -308,6 +398,8 @@ function executarProcessamento({ empresasPax, empresasConciliacao }) {
 
             const engine     = new Engine(gpsLimpo, paxLimpo);
             AppState.session = engine.process(empresasConciliacao);
+            AppState.session.fonteGps    = AppState.gpsFonte;
+            AppState.session.cittatiMeta = AppState.cittatiMeta;
 
             console.log("[DEBUG executarProcessamento] session.resumo:", AppState.session.resumo);
             console.log("[DEBUG executarProcessamento] session.empresasConciliadas:", AppState.session.empresasConciliadas);
@@ -401,6 +493,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     UIController.initFiltros();
     UIController.initSelectAll();
+
+    // GPS Cittati: lista de dias do serviço
+    document.getElementById("btn-cittati-buscar")
+        ?.addEventListener("click", buscarGpsCittati);
+    listarDiasCittati();
 
     // Botões principais
     document.getElementById("btn-processar")

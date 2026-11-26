@@ -49,6 +49,41 @@ const APP_CONFIG = {
             }
         },
 
+        // GPS Cittati — viagens do BI, servidas pelo flow-api
+        // (docs/cittati_bi_servico.md). Alternativa ao GPS Sonda acima.
+        cittati: {
+            servico: "https://rafaelplan.local/flow-api/cittati",
+
+            // Motivos que o operador lança em viagem que RODOU mas o sistema
+            // não reconheceu. Padronizados entre as empresas: o texto precisa
+            // bater exatamente (motivo é cadastro; grafia diferente não vale).
+            // Qualquer outro motivo é justificativa de omissão de cada empresa.
+            motivosRealizada: [
+                "#01 - GPS INOPERANTE",
+                "#02 - GPS COM FALHA",
+                "#03 - FEZ 50pp TRAJETO",
+                "#04 - ERRO SISTEMA"
+            ],
+
+            // Ponto final alterado: viagem cujo ponto final aparece em até
+            // este % das viagens da mesma rota (empresa + linha + sentido +
+            // nomeAtendimento) e não é o ponto final principal da rota.
+            pontoFinal: {
+                participacaoMaximaPct: 25
+            },
+
+            normalizacao: {
+                empresa: {
+                    "Rápido Cuiabá Transporte Urbano":        "Rapido",
+                    "VPAR Transportes e Serviços SPE":        "Vpar",
+                    "Caribus Transportes e Serviços":         "Caribus",
+                    "Integração Transporte":                  "Integracao",
+                    "União Transporte e Turismo":             "Uniao",
+                    "Consórcio Metropolitano de Transportes": "Consorcio Met"
+                }
+            }
+        },
+
         bilhetagem: {
             colunas: {
                 horario:  { coluna: "F", regex: /\d{2}:\d{2}/,                                         descricao: "HH:MM (horário de validação)" },
@@ -244,7 +279,21 @@ const APP_CONFIG = {
                 alto:  60,
                 medio: 30
             }
-        }
+        },
+
+        // Só para GPS Cittati
+        cittati: {
+            // Indício de que uma omissão rodou: passageiros do carro previsto
+            // dentro da janela da viagem. Conta os não atribuídos e os que
+            // foram para outra viagem por tolerância/sugestão (não os de
+            // match direto, etapa A). Mínimo para contar como indício:
+            paxIndicioMin: 3,
+
+            // Ida quebrada: mesmo carro e mesma linha, a segunda viagem
+            // prevista para começar até este tempo depois do fim previsto
+            // da primeira (viagens encadeadas).
+            idaQuebradaGapMin: 30
+        },
 
         // Novos módulos entram aqui:
         // intervalosLongos:  { ativo: true, ... }

@@ -16,9 +16,17 @@
 ============================================================ */
 #section-import .drop-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
     gap: 12px;
 }
+
+/* Card do GPS Cittati: tem controles próprios (não abre seletor de arquivo) */
+#drop-cittati { cursor: default; }
+#drop-cittati select {
+    width: 100%; max-width: 160px; height: 28px; font-size: 12px; font-family: var(--mono);
+    background: var(--bg-2); color: var(--text); border: 1px solid var(--border); border-radius: 4px;
+}
+#drop-cittati .btn { height: 28px; font-size: 12px; padding: 0 12px; }
 
 .drop-zone {
     border: 1px dashed var(--border-hi);
@@ -165,9 +173,13 @@
 
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     gap: 10px;
 }
+
+/* Contadores só do GPS Cittati: clicáveis, abrem a aba da análise */
+.stat-card.so-cittati { cursor: pointer; }
+.stat-card.so-cittati:hover { border-color: var(--accent); }
 
 .stat-card {
     background: var(--bg-3);
@@ -396,10 +408,21 @@
 
             <!-- GPS -->
             <div class="drop-zone" id="drop-gps">
-                <input type="file" id="input-gps" class="hidden" accept=".csv">
+                <input type="file" id="input-gps" class="hidden" accept=".csv,.json">
                 <i data-lucide="upload-cloud"></i>
                 <strong>Arquivo GPS</strong>
-                <p>.csv — viagens do dia</p>
+                <p>.csv Sonda ou .json Cittati — viagens do dia</p>
+            </div>
+
+            <!-- GPS Cittati (BI, via serviço flow-api) -->
+            <div class="drop-zone" id="drop-cittati">
+                <i data-lucide="satellite"></i>
+                <strong>GPS Cittati</strong>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <select id="cittati-dia" disabled><option value="">carregando...</option></select>
+                    <button id="btn-cittati-buscar" class="btn btn-primary" disabled>Buscar</button>
+                </div>
+                <p id="cittati-info">consultando o serviço...</p>
             </div>
 
             <!-- Bilhetagem -->
@@ -524,6 +547,24 @@
             <div class="stat-card c-yellow">
                 <div class="stat-label">Sugestões</div>
                 <div class="stat-value" id="stat-sugestoes">—</div>
+            </div>
+
+            <!-- Só com GPS Cittati — clique abre a análise -->
+            <div class="stat-card c-red so-cittati hidden" onclick="Anomalies.abrirAba('motivos')" title="Omissões sem motivo lançado">
+                <div class="stat-label">Omissão s/ motivo</div>
+                <div class="stat-value" id="stat-cit-sem-motivo">—</div>
+            </div>
+            <div class="stat-card c-yellow so-cittati hidden" onclick="Anomalies.abrirAba('motivos')" title="Viagens realizadas com motivo lançado">
+                <div class="stat-label">Realizada c/ motivo</div>
+                <div class="stat-value" id="stat-cit-com-motivo">—</div>
+            </div>
+            <div class="stat-card c-yellow so-cittati hidden" onclick="Anomalies.abrirAba('parciais')" title="Não realizadas com início sem fim ou fim sem início">
+                <div class="stat-label">Parciais</div>
+                <div class="stat-value" id="stat-cit-parciais">—</div>
+            </div>
+            <div class="stat-card so-cittati hidden" onclick="Anomalies.abrirAba('ponto')" title="Viagens fechadas num ponto final diferente do da rota">
+                <div class="stat-label">Ponto final alterado</div>
+                <div class="stat-value" id="stat-cit-ponto">—</div>
             </div>
         </div>
     </section>
@@ -782,6 +823,7 @@
 ============================================================ -->
 <script src="vendor/jszip.min.js"></script>
 <script src="js/settings.js"></script>
+<script src="js/Cittati.js"></script>
 <script src="js/DataNormalizer.js"></script>
 <script src="js/Parser.js"></script>
 <script src="js/PaxCorte.js"></script>
@@ -789,6 +831,7 @@
 <script src="js/Storage.js"></script>
 <script src="js/UIController.js"></script>
 <script src="js/main.js"></script>
+<script src="js/modules/CittatiAnalises.js"></script>
 <script src="js/modules/Anomalies.js"></script>
 
 <script>

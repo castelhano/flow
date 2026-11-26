@@ -70,7 +70,8 @@ class Engine {
             .map((r, idx) => this._buildViagem(r, idx));
 
         // Viagens da madrugada que encerram a noite do dia → 1440+
-        this._ajustarMadrugadaGps(viagens);
+        // (Cittati já vem com data e hora: a janela chega no lugar certo)
+        this._ajustarMadrugadaGps(viagens.filter(v => !v.cittati));
 
         // --- Passageiros (Bilhetagem) ---
         // Linhas ignoradas são excluídas da conciliação mas preservadas no modelo
@@ -143,13 +144,20 @@ class Engine {
         const hIni = isOmissao ? r.partidaPlanejada  : r.partidaReal;
         const hFim = isOmissao ? r.chegadaPlanejada  : r.chegadaReal;
 
-        const mInicio = this._toMin(hIni) ?? 0;
-        let   mFim    = this._toMin(hFim) ?? mInicio;
+        let mInicio, mFim, pernoite = false;
+        if (Number.isFinite(r.mJanelaInicio) && Number.isFinite(r.mJanelaFim)) {
+            // Cittati: janela já resolvida na linha do tempo do dia (Cittati.js)
+            mInicio = r.mJanelaInicio;
+            mFim    = r.mJanelaFim;
+        } else {
+            mInicio = this._toMin(hIni) ?? 0;
+            mFim    = this._toMin(hFim) ?? mInicio;
 
-        // Virada de dia: chegada menor que partida = passou da meia-noite
-        // (inclui chegada 00:00:xx, que antes era lida como "sem horário")
-        const pernoite = mFim < mInicio;
-        if (pernoite) mFim += 1440;
+            // Virada de dia: chegada menor que partida = passou da meia-noite
+            // (inclui chegada 00:00:xx, que antes era lida como "sem horário")
+            pernoite = mFim < mInicio;
+            if (pernoite) mFim += 1440;
+        }
 
         return {
             // Identificação
@@ -182,7 +190,10 @@ class Engine {
             editadaManualmente:  false,  // true quando usuário altera via UI
 
             // Conciliação — populado pelas etapas A/B ou confirmação do usuário
-            paxEfetivos: []
+            paxEfetivos: [],
+
+            // Dados da Cittati (motivo, rota, parcial, ponto final) — null no Sonda
+            cittati: r.cittati || null
         };
     }
 
@@ -409,6 +420,15 @@ class Engine {
         const extras        = viagensScope.filter(v => v.isExtra).length;
         const editadas      = viagensScope.filter(v => v.isEditada).length;
 
+        // Cittati: alertas que vêm do próprio BI (não dependem da bilhetagem)
+        const cit = viagensScope.filter(v => v.cittati).map(v => v.cittati);
+        const cittati = cit.length === 0 ? null : {
+            pontoAlterado:      cit.filter(c => c.pontoAlterado).length,
+            omissaoSemMotivo:   cit.filter(c => !c.realizadaBI && !c.motivo).length,
+            realizadaComMotivo: cit.filter(c => c.realizadaBI && c.motivo).length,
+            parciais:           cit.filter(c => c.parcial).length
+        };
+
         const sugeridosC     = sugestoes.length;
         const autoSelecionaveis = sugestoes.filter(
             s => s.confianca >= APP_CONFIG.ui.confiancaAutoSelecionavel
@@ -430,6 +450,7 @@ class Engine {
             omissoes,
             extras,
             editadas,
+            cittati,
             sugeridosC,
             autoSelecionaveis,
             excecoesSemSugestao,

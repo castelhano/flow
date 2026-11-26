@@ -12,6 +12,7 @@
 const Anomalies = {
 
     _pendentes: {},
+    _cittatiItens: {},   // itens de cada aba Cittati (motivos/parciais/ponto), por índice da linha
 
 
     // ==========================================================
@@ -26,6 +27,14 @@ const Anomalies = {
         document.body.classList.add('modal-open');
 
         const empresas = [...new Set(session.viagens.map(v => v.empresa).filter(Boolean))].sort();
+        const ehCittati = session.viagens.some(v => v.cittati);
+
+        const chkAnalise = (id, label, visivel = true) => `
+            <label style="display:${visivel ? 'flex' : 'none'}; align-items:center; gap:8px; cursor:pointer; font-size:0.84rem;">
+                <input type="checkbox" id="${id}" ${visivel ? 'checked' : ''}
+                    style="width:14px; height:14px; cursor:pointer; accent-color:var(--accent);">
+                ${label}
+            </label>`;
 
         const checkboxesEmpresas = empresas.map(emp => `
             <label style="display:flex; align-items:center; gap:7px; padding:3px 0;
@@ -66,16 +75,11 @@ const Anomalies = {
                                 <div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.08em;
                                             color:var(--text-3); font-weight:600; margin-bottom:10px;">Análises</div>
                                 <div style="display:flex; flex-direction:column; gap:8px;">
-                                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.84rem;">
-                                        <input type="checkbox" id="anomalies-chk-omissoes" checked
-                                            style="width:14px; height:14px; cursor:pointer; accent-color:var(--accent);">
-                                        Omissões com passageiro
-                                    </label>
-                                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.84rem;">
-                                        <input type="checkbox" id="anomalies-chk-editadas" checked
-                                            style="width:14px; height:14px; cursor:pointer; accent-color:var(--accent);">
-                                        Editadas suspeitas
-                                    </label>
+                                    ${chkAnalise('anomalies-chk-omissoes', 'Omissões com passageiro')}
+                                    ${chkAnalise('anomalies-chk-editadas', 'Editadas suspeitas', !ehCittati)}
+                                    ${chkAnalise('anomalies-chk-motivos',  'Validar motivos', ehCittati)}
+                                    ${chkAnalise('anomalies-chk-parciais', 'Viagens parciais', ehCittati)}
+                                    ${chkAnalise('anomalies-chk-ponto',    'Ponto final alterado', ehCittati)}
                                 </div>
                             </div>
 
@@ -134,6 +138,15 @@ const Anomalies = {
             </div>
         `);
         if (window.lucide) lucide.createIcons();
+    },
+
+    // Atalho dos contadores Cittati do resumo: abre o modal, processa com
+    // as opções padrão e mostra a aba pedida
+    abrirAba(aba) {
+        this.openModal();
+        if (!document.getElementById('anomalies-overlay')) return;
+        this._processar();
+        this._switchTab(aba);
     },
 
     _fecharModal() {
@@ -203,19 +216,62 @@ const Anomalies = {
             ...document.querySelectorAll('input[name="anomalies-empresa"]:checked')
         ].map(el => el.value);
 
-        const fazerOmissoes = document.getElementById('anomalies-chk-omissoes')?.checked;
-        const fazerEditadas = document.getElementById('anomalies-chk-editadas')?.checked;
+        const marcado = id => !!document.getElementById(id)?.checked;
+        const fazer = {
+            omissoes: marcado('anomalies-chk-omissoes'),
+            editadas: marcado('anomalies-chk-editadas'),
+            motivos:  marcado('anomalies-chk-motivos'),
+            parciais: marcado('anomalies-chk-parciais'),
+            ponto:    marcado('anomalies-chk-ponto')
+        };
 
         if (empresasSel.length === 0) return alert("Selecione ao menos uma empresa.");
-        if (!fazerOmissoes && !fazerEditadas) return alert("Selecione ao menos uma análise.");
+        if (!Object.values(fazer).some(Boolean)) return alert("Selecione ao menos uma análise.");
 
         const session     = AppState.session;
         const empresasSet = new Set(empresasSel);
 
-        const omissoesResult = fazerOmissoes ? this._analisarOmissoes(session, empresasSet) : null;
-        const editadasResult = fazerEditadas ? this._analisarEditadas(session, empresasSet) : null;
+        this._pendentes = {};
+        this._cittatiItens = {};
+        const abas = [];
 
-        this._renderResultados(omissoesResult, editadasResult);
+        if (fazer.omissoes) {
+            const r = this._analisarOmissoes(session, empresasSet);
+            abas.push({ id: 'omissoes', label: 'Omissões com passageiro', n: r.length, html: this._htmlTabContent('omissoes', r) });
+        }
+        if (fazer.editadas) {
+            const r = this._analisarEditadas(session, empresasSet);
+            abas.push({ id: 'editadas', label: 'Editadas suspeitas', n: r.length, html: this._htmlTabContent('editadas', r) });
+        }
+        if (fazer.motivos || fazer.parciais || fazer.ponto) {
+            const c = CittatiAnalises.analisar(session, empresasSet);
+            const avisoPax = c.semBilhetagem
+                ? "Sem bilhetagem: passageiros não contam como indício. Justificativas de GPS inoperante (sem horário real) tendem a aparecer como sem indício."
+                : "";
+            if (fazer.motivos) abas.push({
+                id: 'motivos', label: 'Motivos', n: c.motivos.length,
+                html: this._htmlTabelaCittati('motivos', c.motivos, [
+                    `Omissão precisa de motivo; realizada não deveria ter. Justificativa ${APP_CONFIG.fontes.cittati.motivosRealizada.map(m => m.slice(0, 3)).join("/")} sem indício de que a viagem rodou é suspeita.`,
+                    `${c.justificadasOk} justificativa(s) com indício — o motor concorda, não listadas.`,
+                    avisoPax
+                ])
+            });
+            if (fazer.parciais) abas.push({
+                id: 'parciais', label: 'Parciais', n: c.parciais.length,
+                html: this._htmlTabelaCittati('parciais', c.parciais, [
+                    "Não realizadas com um dos horários reais. Ida quebrada: o mesmo carro tem uma viagem com início e sem fim seguida de uma com fim e sem início — o GPS perdeu a passagem no ponto final. Já justificadas com motivo \"#\" ficam de fora.",
+                    "Corrigir na Cittati; a correção aparece no BI no dia seguinte."
+                ])
+            });
+            if (fazer.ponto) abas.push({
+                id: 'ponto', label: 'Ponto final alterado', n: c.pontoFinal.length,
+                html: this._htmlTabelaCittati('ponto', c.pontoFinal, [
+                    `Viagens fechadas num ponto final que não é o da rota (linha + sentido + rota). Limite: até ${APP_CONFIG.fontes.cittati.pontoFinal.participacaoMaximaPct}% das viagens da rota.`
+                ])
+            });
+        }
+
+        this._renderResultados(abas);
     },
 
 
@@ -233,8 +289,9 @@ const Anomalies = {
             !p.assigned && !ignoradosIds.has(p.id) && empresasSet.has(p.empresa)
         );
 
+        // Cittati: omissão com motivo "#" o operador já trata como realizada
         const omissoes = session.viagens.filter(v =>
-            v.isOmissao && empresasSet.has(v.empresa)
+            v.isOmissao && empresasSet.has(v.empresa) && !v.cittati?.motivoRealizada
         );
 
         // Agrupar por empresa + linha_base + tabela
@@ -291,6 +348,7 @@ const Anomalies = {
                         p.mHorario >= mInicioGrupo && p.mHorario <= mFimGrupo
                     );
                     if (paxNaJanela.length === 0) continue;
+                    if (this._carroEmOutraViagem(session, veiculo, chain, paxNaJanela)) continue;
                     const percentual = Math.round((paxNaJanela.length / paxCarro.length) * 100);
                     if (percentual >= densMin) {
                         carrosSuspeitos.push({ veiculo, paxNaJanela, totalOrfaos: paxCarro, percentual });
@@ -314,6 +372,21 @@ const Anomalies = {
         }
 
         return suspeitos;
+    },
+
+
+    // Cittati: toda viagem tem carro previsto, inclusive as omissões. Carro
+    // escalado em outra viagem (fora desta cadeia) no horário dos passageiros
+    // estava lá, não aqui — não é candidato. No Sonda a omissão não tem carro
+    // e o critério fica como era.
+    _carroEmOutraViagem(session, veiculo, chain, paxNaJanela) {
+        if (!chain[0].cittati) return false;
+        const ini = Math.min(...paxNaJanela.map(p => p.mHorario));
+        const fim = Math.max(...paxNaJanela.map(p => p.mHorario));
+        const daCadeia = new Set(chain.map(v => v.id));
+        return session.viagens.some(v =>
+            v.veiculo === veiculo && !daCadeia.has(v.id) && v.mInicio <= fim && v.mFim >= ini
+        );
     },
 
 
@@ -401,35 +474,24 @@ const Anomalies = {
     // RENDER — preenche #anomalies-resultados
     // ==========================================================
 
-    _renderResultados(omissoesResult, editadasResult) {
-        this._pendentes = {};
+    // abas: [{ id, label, n, html }]
+    _renderResultados(abas) {
+        const estiloBtn = ativo => `padding:8px 18px; font-size:0.82rem; cursor:pointer; border:none; border-radius:4px;
+            font-family:var(--mono); background:${ativo ? 'var(--accent)' : 'var(--bg-3)'}; color:${ativo ? 'white' : 'var(--text-2)'};`;
 
-        const hasBoth = omissoesResult !== null && editadasResult !== null;
-        let html = "";
-
-        if (hasBoth) {
-            const nOm = omissoesResult.length;
-            const nEd = editadasResult.length;
+        let html;
+        if (abas.length === 1) {
+            html = abas[0].html;
+        } else {
             html = `
                 <div style="display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap;">
-                    <button id="at-btn-omissoes" onclick="Anomalies._switchTab('omissoes')"
-                        style="padding:8px 18px; font-size:0.82rem; cursor:pointer; border:none;
-                               background:var(--accent); color:white; border-radius:4px; font-family:var(--mono);">
-                        Omissões com passageiro&nbsp;<span style="opacity:0.75;">(${nOm})</span>
-                    </button>
-                    <button id="at-btn-editadas" onclick="Anomalies._switchTab('editadas')"
-                        style="padding:8px 18px; font-size:0.82rem; cursor:pointer; border:none;
-                               background:var(--bg-3); color:var(--text-2); border-radius:4px; font-family:var(--mono);">
-                        Editadas suspeitas&nbsp;<span style="opacity:0.75;">(${nEd})</span>
-                    </button>
+                    ${abas.map((a, i) => `
+                        <button id="at-btn-${a.id}" data-aba="${a.id}" onclick="Anomalies._switchTab('${a.id}')" style="${estiloBtn(i === 0)}">
+                            ${a.label}&nbsp;<span style="opacity:0.75;">(${a.n})</span>
+                        </button>`).join("")}
                 </div>
-                <div id="at-tab-omissoes">${this._htmlTabContent('omissoes', omissoesResult)}</div>
-                <div id="at-tab-editadas" style="display:none;">${this._htmlTabContent('editadas', editadasResult)}</div>
+                ${abas.map((a, i) => `<div id="at-tab-${a.id}" data-aba="${a.id}" style="display:${i === 0 ? 'block' : 'none'};">${a.html}</div>`).join("")}
             `;
-        } else if (omissoesResult !== null) {
-            html = this._htmlTabContent('omissoes', omissoesResult);
-        } else if (editadasResult !== null) {
-            html = this._htmlTabContent('editadas', editadasResult);
         }
 
         const el = document.getElementById('anomalies-resultados');
@@ -437,13 +499,13 @@ const Anomalies = {
     },
 
     _switchTab(id) {
-        ['omissoes', 'editadas'].forEach(tab => {
-            const panel = document.getElementById(`at-tab-${tab}`);
-            const btn   = document.getElementById(`at-btn-${tab}`);
-            if (panel) panel.style.display = tab === id ? 'block' : 'none';
-            if (btn) {
-                btn.style.background = tab === id ? 'var(--accent)' : 'var(--bg-3)';
-                btn.style.color      = tab === id ? 'white'         : 'var(--text-2)';
+        document.querySelectorAll('#anomalies-resultados [data-aba]').forEach(el => {
+            const ativo = el.dataset.aba === id;
+            if (el.tagName === 'BUTTON') {
+                el.style.background = ativo ? 'var(--accent)' : 'var(--bg-3)';
+                el.style.color      = ativo ? 'white'         : 'var(--text-2)';
+            } else {
+                el.style.display = ativo ? 'block' : 'none';
             }
         });
     },
@@ -682,7 +744,7 @@ const Anomalies = {
                         </span>
                     </div>
                     <span style="font-size:0.76rem; color:var(--text-3); white-space:nowrap;">
-                        ${omLabel}
+                        ${omLabel}${this._motivosOmissoes(s.omissoes)}
                     </span>
                 </div>
 
@@ -757,6 +819,145 @@ const Anomalies = {
 
             </div>
         `;
+    },
+
+
+    // ==========================================================
+    // TABELA — análises Cittati (motivos, parciais, ponto final)
+    // Uma linha por viagem; filtros por empresa, linha, carro e tipo.
+    // ==========================================================
+
+    _htmlTabelaCittati(aba, itens, notas = []) {
+        this._cittatiItens[aba] = itens;
+
+        const notasHtml = notas.filter(Boolean).map(n =>
+            `<p style="font-size:0.78rem; color:var(--text-3); margin:0 0 6px; line-height:1.5;">${n}</p>`
+        ).join("");
+
+        if (itens.length === 0) {
+            return `${notasHtml}<p style="color:var(--text-3); font-size:0.88rem; padding:8px 0;">Nenhuma viagem encontrada.</p>`;
+        }
+
+        const uniq   = f => [...new Set(itens.map(f).filter(Boolean))].sort();
+        const opts   = arr => arr.map(v => `<option value="${this._esc(v)}">${this._esc(v)}</option>`).join("");
+        const tipos  = uniq(x => x.tipo).map(t => `<option value="${t}">${CittatiAnalises.TIPOS[t] || t}</option>`).join("");
+        const sel    = `class="input" style="height:30px; font-size:0.82rem; min-width:120px;" onchange="Anomalies._filtrarCittati('${aba}')"`;
+        const lbl    = `style="font-size:0.65rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-3); margin-bottom:4px;"`;
+        const th     = `style="padding:6px 8px; color:var(--text-3); font-size:0.7rem; text-align:left; border-bottom:1px solid var(--border); white-space:nowrap;"`;
+
+        const linhas = itens.map((x, i) => this._htmlLinhaCittati(aba, x, i)).join("");
+
+        return `
+            ${notasHtml}
+            <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; background:var(--bg-2);
+                        border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin:10px 0 14px;">
+                <div><div ${lbl}>Empresa</div><select id="cf-${aba}-empresa" ${sel}><option value="">Todas</option>${opts(uniq(x => x.viagem.empresa))}</select></div>
+                <div><div ${lbl}>Linha</div><select id="cf-${aba}-linha" ${sel}><option value="">Todas</option>${opts(uniq(x => x.viagem.linha_base))}</select></div>
+                <div><div ${lbl}>Carro</div><select id="cf-${aba}-carro" ${sel}><option value="">Todos</option>${opts(uniq(x => x.viagem.veiculo))}</select></div>
+                <div><div ${lbl}>Tipo</div><select id="cf-${aba}-tipo" ${sel}><option value="">Todos</option>${tipos}</select></div>
+                <span id="cf-${aba}-contador" style="font-size:0.78rem; color:var(--text-3); align-self:center;">${itens.length} viagem(ns)</span>
+                <button onclick="Anomalies._exportCSVCittati('${aba}')" class="btn btn-ghost"
+                    style="margin-left:auto; font-size:0.78rem; white-space:nowrap; height:30px; align-self:flex-end;">↓ CSV</button>
+            </div>
+            <div style="overflow-x:auto; border:1px solid var(--border); border-radius:6px;">
+                <table style="width:100%; font-size:0.8rem; border-collapse:collapse;">
+                    <thead><tr style="background:var(--bg-3);">
+                        <th ${th}>Tipo</th><th ${th}>Empresa</th><th ${th}>Linha</th><th ${th}>Rota</th><th ${th}>Tab</th>
+                        <th ${th}>Carro</th><th ${th}>Previsto</th><th ${th}>Real</th><th ${th}>Motivo</th>
+                        <th ${th} title="Realizada: passageiros atribuídos. Não realizada: passageiros do carro na janela da viagem.">Pax</th>
+                        <th ${th}>Ponto final</th>
+                    </tr></thead>
+                    <tbody id="cf-${aba}-corpo">${linhas}</tbody>
+                </table>
+            </div>
+        `;
+    },
+
+    _htmlLinhaCittati(aba, x, idx) {
+        const v = x.viagem, c = v.cittati;
+        const td  = (conteudo, extra = "") => `<td style="padding:5px 8px; border-bottom:1px solid var(--border); ${extra}">${conteudo}</td>`;
+        const tag = (texto, cor) => `<span style="font-size:0.7rem; color:${cor}; border:1px solid ${cor}; border-radius:3px; padding:0 4px; margin-left:4px; white-space:nowrap;">${texto}</span>`;
+
+        let tipo = CittatiAnalises.TIPOS[x.tipo] || x.tipo;
+        if (x.parte) tipo += ` (${x.parte}/2)`;
+        if (x.indicio) tipo += tag("com indício", "var(--warning)");
+
+        const corTipo = { justificativa_suspeita: "var(--danger)", realizada_com_motivo: "var(--warning)", ida_quebrada: "var(--accent)" }[x.tipo] || "var(--text)";
+        const pax = c.realizadaBI ? v.paxEfetivos.length : (x.paxJanela ?? "—");
+        const ponto = c.pontoAlterado
+            ? `${this._esc(c.pontoFinal)}<div style="font-size:0.7rem; color:var(--text-3);">rota: ${this._esc(c.pontoFinalRota)}</div>`
+            : this._esc(c.pontoFinal);
+        const real = c.realizadaBI || c.parcial
+            ? `${v.partidaReal || "—"} → ${v.chegadaReal || "—"}`
+            : "—";
+        const motivo = (c.motivo ? this._esc(c.motivo) : `<span style="color:var(--text-3);">—</span>`)
+            + (c.problemaHardware ? tag("falha hardware", "var(--text-3)") : "");
+        const fundo = x.parte ? "background:var(--accent-glow);" : "";
+
+        return `
+            <tr data-idx="${idx}" data-empresa="${this._esc(v.empresa)}" data-linha="${this._esc(v.linha_base)}"
+                data-carro="${this._esc(v.veiculo)}" data-tipo="${x.tipo}" style="${fundo}">
+                ${td(tipo, `color:${corTipo}; white-space:nowrap;`)}
+                ${td(this._esc(v.empresa))}
+                ${td(this._esc(v.linha), "white-space:nowrap;")}
+                ${td(this._esc(c.rota))}
+                ${td(this._esc(v.tabela))}
+                ${td(this._esc(v.veiculo) || "—", "font-family:var(--mono);")}
+                ${td(`${v.partidaPlanejada} → ${v.chegadaPlanejada}`, "font-family:var(--mono); white-space:nowrap;")}
+                ${td(real, "font-family:var(--mono); white-space:nowrap;")}
+                ${td(motivo)}
+                ${td(pax, "font-family:var(--mono); text-align:right;")}
+                ${td(ponto)}
+            </tr>
+        `;
+    },
+
+    _filtrarCittati(aba) {
+        const val = k => document.getElementById(`cf-${aba}-${k}`)?.value || "";
+        const f = { empresa: val("empresa"), linha: val("linha"), carro: val("carro"), tipo: val("tipo") };
+        let n = 0;
+        document.querySelectorAll(`#cf-${aba}-corpo tr`).forEach(tr => {
+            const ok = Object.entries(f).every(([k, v]) => !v || tr.dataset[k] === v);
+            tr.style.display = ok ? "" : "none";
+            if (ok) n++;
+        });
+        const cont = document.getElementById(`cf-${aba}-contador`);
+        if (cont) cont.innerText = `${n} viagem(ns)`;
+    },
+
+    _exportCSVCittati(aba) {
+        const itens = this._cittatiItens[aba] || [];
+        const rows = [["Tipo", "Empresa", "Linha", "Sentido", "Rota", "Tabela", "Carro",
+                       "Previsto início", "Previsto fim", "Real início", "Real fim",
+                       "Motivo", "Falha hardware", "Pax", "Ponto final", "Ponto final da rota", "Id Cittati"]];
+        document.querySelectorAll(`#cf-${aba}-corpo tr`).forEach(tr => {
+            if (tr.style.display === "none") return;
+            const x = itens[+tr.dataset.idx];
+            if (!x) return;
+            const v = x.viagem, c = v.cittati;
+            rows.push([
+                (CittatiAnalises.TIPOS[x.tipo] || x.tipo) + (x.parte ? ` (${x.parte}/2)` : "") + (x.indicio ? " - com indício" : ""),
+                v.empresa, v.linha_base, v.sentido, c.rota, v.tabela, v.veiculo,
+                c.prevInicio, c.prevFim, c.realInicio, c.realFim,
+                c.motivo, c.problemaHardware ? "Sim" : "",
+                c.realizadaBI ? v.paxEfetivos.length : (x.paxJanela ?? ""),
+                c.pontoFinal, c.pontoFinalRota, c.id
+            ]);
+        });
+        this._downloadCSV(rows, `cittati_${aba}`);
+    },
+
+    // Motivos das omissões de um card (Cittati), para o cabeçalho
+    _motivosOmissoes(omissoes) {
+        const motivos = [...new Set(omissoes.map(o => o.cittati?.motivo).filter(Boolean))];
+        if (!omissoes.some(o => o.cittati)) return "";
+        return motivos.length
+            ? ` · motivo: ${motivos.map(m => this._esc(m)).join(", ")}`
+            : ` · <span style="color:var(--danger);">sem motivo</span>`;
+    },
+
+    _esc(s) {
+        return String(s ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
     },
 
 
