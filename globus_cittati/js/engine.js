@@ -40,7 +40,7 @@ const GlobusEngine = (() => {
     const ORDEM_CRITICAS = [
         "Tabela sem carro", "Tabela sem condutor", "Carro sobreposto", "Condutor sobreposto",
         "Horário incoerente", "Saída de garagem inválida", "Saída sem recolhimento anterior",
-        "Recolheu sem saída de garagem", "Linha sem garagem", "Carro em linhas de garagens diferentes",
+        "Recolheu sem saída de garagem", "Tabela sem recolhida", "Linha sem garagem", "Carro em linhas de garagens diferentes",
         "Viagens não conferem",
     ];
     const CRITICAS_RESUMIDAS = new Set();
@@ -688,6 +688,24 @@ const GlobusEngine = (() => {
         return criticas;
     }
 
+    // O carro termina o dia recolhendo. A tabela A que acaba na rendição não conta:
+    // o mesmo carro segue na B. No meio do dia, quem cobre é "Saída sem recolhimento anterior".
+    function criticasDeFimDoDia(grupos) {
+        const criticas = [];
+        for (const { carro, data, eventos } of operacoesDoDia(grupos)) {
+            const ultimo = eventos[eventos.length - 1];
+            if (ultimo.campos[COL.CODIGO].trim() === ATIVIDADES.RECOLHE) continue;
+
+            const { linha, tabela, inicio, fim } = dadosEvento(ultimo.campos);
+            criticas.push({
+                tipo: "Tabela sem recolhida",
+                data, linha, tabela,
+                detalhe: `${carro || "Sem carro"}: último evento ${inicio}–${fim} (ajustar no ERP)`,
+            });
+        }
+        return criticas;
+    }
+
     // Trabalha sobre uma cópia: a análise original continua valendo
     // quando o usuário muda uma decisão na etapa de confirmação.
     function resolver(analise, decisoes = {}, programacoes = {}) {
@@ -742,6 +760,7 @@ const GlobusEngine = (() => {
                 ...garagem.criticas,
                 ...criticasGaragem,
                 ...criticasDeRecolhimento(grupos),
+                ...criticasDeFimDoDia(grupos),
             ].sort((a, b) => ORDEM_CRITICAS.indexOf(a.tipo) - ORDEM_CRITICAS.indexOf(b.tipo)),
         };
     }
