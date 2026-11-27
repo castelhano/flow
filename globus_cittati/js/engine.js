@@ -32,14 +32,18 @@ const GlobusEngine = (() => {
     const CODIGOS_PERMITIDOS = new Set(["", ATIVIDADES.RENDICAO, ATIVIDADES.RECOLHE,
         ATIVIDADES.SAIDA_GARAGEM, ATIVIDADES.TRANSFERENCIA, ATIVIDADES.VIAGEM_NORMAL]);
 
+    // Não produtivos (FLAG 0) que passam para a Cittati. A saída de garagem
+    // não vem do Globus: é gerada depois da limpeza (gerarSaidasGaragem).
+    const IMPRODUTIVOS_PERMITIDOS = new Set([ATIVIDADES.RECOLHE]);
+
     // Ordem de exibição das críticas; as resumidas aparecem em uma linha só na tela
     const ORDEM_CRITICAS = [
         "Tabela sem carro", "Tabela sem condutor", "Carro sobreposto", "Condutor sobreposto",
         "Horário incoerente", "Saída de garagem inválida", "Saída sem recolhimento anterior",
         "Recolheu sem saída de garagem", "Linha sem garagem", "Carro em linhas de garagens diferentes",
-        "Viagens não conferem", "Improdutivo sem código",
+        "Viagens não conferem",
     ];
-    const CRITICAS_RESUMIDAS = new Set(["Improdutivo sem código"]);
+    const CRITICAS_RESUMIDAS = new Set();
 
     // Garagem de cada linha (sigla da Cittati). Linha nova no Globus precisa entrar aqui;
     // sem ela, a saída e o recolhimento ficam sem garagem e a rotina mostra uma crítica.
@@ -146,16 +150,15 @@ const GlobusEngine = (() => {
     // com horário anterior ao fim dela (309: viagem até 05:44, marco 05:09).
     // ----------------------------------------------------------
     function marcarRemovidos(grupo) {
-        grupo.eventos.forEach((evento, i) => {
+        grupo.eventos.forEach(evento => {
             const { campos } = evento;
             const codigo = campos[COL.CODIGO].trim();
-            const ultimo = i === grupo.eventos.length - 1;
 
             if (!CODIGOS_PERMITIDOS.has(codigo)) {
                 evento.motivoRemocao = `código ${codigo}`;
-            } else if (!codigo && campos[COL.FLAG] === "0" && campos[COL.SENTIDO] === "C" && !ultimo) {
-                // Só informativo. O do fim da tabela fica: é um fechamento sem código (crítica)
-                evento.motivoRemocao = "informativo, sentido C";
+            } else if (campos[COL.FLAG] === "0" && !IMPRODUTIVOS_PERMITIDOS.has(codigo)) {
+                // Viagem reservada, rendição, informativo ou fechamento sem código
+                evento.motivoRemocao = codigo ? `não produtivo, código ${codigo}` : "não produtivo sem código";
             }
         });
     }
@@ -379,17 +382,6 @@ const GlobusEngine = (() => {
                     return `Seq ${seq} (${inicio}–${fim})`;
                 }).join(", ");
                 criticas.push({ tipo: "Horário incoerente", data, linha, tabela, detalhe: `${seqs} (ajustar no ERP)` });
-            }
-
-            const semCodigo = eventos.filter(e => e.campos[COL.FLAG] === "0" && !e.campos[COL.CODIGO].trim());
-            if (semCodigo.length) {
-                const seqs = semCodigo.map(e => e.campos[COL.SEQ]).join(", ");
-                criticas.push({
-                    tipo: "Improdutivo sem código",
-                    data, linha, tabela,
-                    detalhe: `Seq ${seqs} (ajustar no ERP)`,
-                    eventos: semCodigo.length,
-                });
             }
         }
         return criticas;
